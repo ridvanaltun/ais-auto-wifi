@@ -104,10 +104,11 @@ class OtpSourceTests(unittest.TestCase):
 class _StatusProvider:
     key, name, supports_status, last_failure = "ais", "AIS SUPER WiFi", True, ""
     def __init__(self, info):
-        self.info = info
-    def matches(self, ssid, *a):
-        return bool(ssid and "ais" in ssid.lower())
+        self.info, self.calls = info, 0
+    def matches(self, *a):
+        return True
     def session_status(self, session, timeout):
+        self.calls += 1
         return self.info
 
 
@@ -116,29 +117,36 @@ class RemainingTimeTests(unittest.TestCase):
         m = _monitor()
         m._status_provider = _StatusProvider({"online": True, "remaining_seconds": 642,
                                               "remaining_text": "00:10:42"})
-        m._update_remaining(object(), ssid=None)
+        m._update_remaining(object())
         snap = m.state.snapshot()
         self.assertEqual((snap["remaining_seconds"], snap["remaining_text"]), (642, "00:10:42"))
 
-    def test_identifies_provider_by_ssid_when_not_logged_in_yet(self):
+    def test_queries_ais_even_without_ssid_or_login(self):
+        # macOS often hides the SSID; the countdown must still appear.
         m = _monitor()
-        m._registry = [_StatusProvider({"online": True, "remaining_seconds": 60,
-                                        "remaining_text": "00:01:00"})]
-        m._update_remaining(object(), ssid="AIS SUPER WiFi")
+        prov = _StatusProvider({"online": True, "remaining_seconds": 60, "remaining_text": "00:01:00"})
+        m._registry = [prov]
+        m._update_remaining(object())
         self.assertEqual(m.state.snapshot()["remaining_text"], "00:01:00")
 
-    def test_non_ais_network_shows_no_countdown(self):
+    def test_non_ais_network_gives_up_after_one_query(self):
         m = _monitor()
-        m._registry = [_StatusProvider({"online": True, "remaining_text": "00:05:00"})]
-        m._update_remaining(object(), ssid="HomeWiFi")  # provider does not match
+        prov = _StatusProvider({"online": False})
+        m._registry = [prov]
+        m._update_remaining(object())
+        m._update_remaining(object())  # should not re-query until reconnect
         self.assertEqual(m.state.snapshot()["remaining_text"], "")
+        self.assertEqual(prov.calls, 1)
+        self.assertTrue(m._status_gave_up)
 
-    def test_logged_out_status_clears_remaining(self):
+    def test_keeps_polling_after_login_even_if_status_blips_false(self):
         m = _monitor()
-        m._status_provider = _StatusProvider({"online": False})
-        m.state.update(remaining_text="00:09:00", remaining_seconds=540)
-        m._update_remaining(object(), ssid=None)
-        self.assertEqual(m.state.snapshot()["remaining_seconds"], None)
+        prov = _StatusProvider({"online": False})
+        m._status_provider = prov
+        m._update_remaining(object())
+        m._update_remaining(object())
+        self.assertEqual(prov.calls, 2)  # logged-in provider is not given up on
+        self.assertFalse(m._status_gave_up)
 
 
 class LoopTests(unittest.TestCase):

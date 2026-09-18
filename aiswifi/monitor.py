@@ -96,6 +96,10 @@ class Monitor:
                                                       cfg.get("ais_status_url"))
         # Provider used to report the remaining session time while online.
         self._status_provider: Optional[Any] = None
+        # Once a status query shows this online network is not an AIS session,
+        # stop re-querying until the connection changes (avoids polling AIS
+        # from an unrelated network every cycle).
+        self._status_gave_up = False
 
         self.state.status = ST_CHECKING if cfg.get("auto_login") else ST_IDLE
 
@@ -178,13 +182,15 @@ class Monitor:
             backoff = 0.0
             self._set_state(status=ST_ONLINE, ssid=ssid,
                             message="Connected", last_error="")
-            self._update_remaining(session, ssid)
+            self._update_remaining(session)
         elif result.state == network.OFFLINE:
             backoff = 0.0
+            self._status_gave_up = False  # connection changed; re-check next time online
             self._set_state(status=ST_OFFLINE, ssid=ssid,
                             message="No network (Wi-Fi may be off)",
                             remaining_seconds=None, remaining_text="")
         else:  # CAPTIVE
+            self._status_gave_up = False
             self._set_state(status=ST_CAPTIVE, ssid=ssid,
                             message="Connection lost, logging in…",
                             remaining_seconds=None, remaining_text="")
@@ -301,10 +307,11 @@ class Monitor:
             if ok:
                 if getattr(provider, "supports_status", False):
                     self._status_provider = provider
+                self._status_gave_up = False
                 self._set_state(status=ST_ONLINE, provider=provider.name,
                                 message="Login successful 🎉",
                                 last_login_ts=time.time(), last_error="")
-                self._update_remaining(session, ssid)
+                self._update_remaining(session)
                 return True
             if attempt < retries:
                 self._stop.wait(2)
@@ -315,38 +322,40 @@ class Monitor:
                         last_error="login_failed")
         return False
 
-    def _status_capable_provider(self, ssid: Optional[str]):
+    def _status_capable_provider(self):
         """
         The provider whose remaining time we can query while online: the one we
-        logged in through, else the one matching the current network (so the
-        countdown also shows when the app starts already connected).
+        logged in through, else any status-capable provider (AIS). The status
+        endpoint needs no SSID or portal URL — which matters because macOS
+        often will not reveal the SSID — so it is not gated on detection.
         """
         if self._status_provider is not None:
             return self._status_provider
-        provider = providers_mod.detect_provider(
-            self._registry, ssid, None, None,
-            preferred_key=self.cfg.get("preferred_provider"))
-        if provider is not None and getattr(provider, "supports_status", False):
-            return provider
+        for provider in self._registry:
+            if getattr(provider, "supports_status", False):
+                return provider
         return None
 
-    def _update_remaining(self, session, ssid: Optional[str]) -> None:
+    def _update_remaining(self, session) -> None:
         """While online, refresh the remaining session time (portal countdown)."""
-        provider = self._status_capable_provider(ssid)
-        if provider is None:
-            self._set_state(remaining_seconds=None, remaining_text="")
+        provider = self._status_capable_provider()
+        if provider is None or (self._status_provider is None and self._status_gave_up):
             return
         try:
             info = provider.session_status(session, float(self.cfg.get("http_timeout", 12)))
         except Exception as exc:
             logger.debug("Could not read the session status: %s", exc)
             info = None
-        if not info or not info.get("online"):
-            # Reachable but not an AIS session (e.g. home Wi-Fi): no countdown.
-            self._set_state(remaining_seconds=None, remaining_text="")
+        if info and info.get("online"):
+            self._status_gave_up = False
+            self._set_state(remaining_seconds=info.get("remaining_seconds"),
+                            remaining_text=info.get("remaining_text") or "")
             return
-        self._set_state(remaining_seconds=info.get("remaining_seconds"),
-                        remaining_text=info.get("remaining_text") or "")
+        # Reachable but not an AIS session (e.g. home Wi-Fi). If we did not log
+        # in through AIS ourselves, stop polling until the connection changes.
+        if self._status_provider is None:
+            self._status_gave_up = True
+        self._set_state(remaining_seconds=None, remaining_text="")
 
     def _make_otp_provider(self) -> Tuple[Optional[Callable[[], None]],
                                           Callable[[], Optional[str]]]:

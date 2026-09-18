@@ -66,8 +66,11 @@ def _diagnose() -> int:
     )
     print(f"Provider     : {provider.name if provider else '(none found)'}")
 
-    if provider is not None and getattr(provider, "supports_status", False):
-        info = provider.session_status(network.new_session())
+    # Query the AIS session status directly (it needs no SSID/portal), so the
+    # countdown shows even when the detected provider is the generic fallback.
+    status_provider = next((p for p in registry if getattr(p, "supports_status", False)), None)
+    if status_provider is not None:
+        info = status_provider.session_status(network.new_session())
         if info and info.get("online"):
             extra = f" (session {info['session_text']})" if info.get("session_text") else ""
             print(f"Time left    : {info.get('remaining_text') or '—'}{extra}")
