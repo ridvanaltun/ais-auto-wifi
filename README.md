@@ -1,6 +1,7 @@
 # AIS Wi-Fi Auto-Login 🛜
 
 [![CI](https://github.com/ridvanaltun/ais-auto-wifi/actions/workflows/ci.yml/badge.svg)](https://github.com/ridvanaltun/ais-auto-wifi/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/ridvanaltun/ais-auto-wifi?sort=semver)](https://github.com/ridvanaltun/ais-auto-wifi/releases/latest)
 
 > 🇹🇭 **Made for Thailand.** This app targets **AIS SUPER WiFi**, the free
 > captive-portal Wi-Fi run by the Thai carrier AIS. If you are not in Thailand
