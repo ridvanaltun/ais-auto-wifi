@@ -210,14 +210,20 @@ number/password/OTP fields.
 The AIS portal ends your connection when its countdown runs out. The app reads
 that same countdown from the portal and shows it while you are online:
 
-- next to the 🛜 icon in the menu bar (e.g. **🛜 9:59**), and
+- next to the 🛜 icon in the menu bar, and
 - as **Time left** in the menu.
+
+To stay readable rather than look like a wall clock, it shows **whole minutes**
+when 5 minutes or more are left (e.g. **🛜 9m**) and switches to a **live
+`M:SS`** in the last 5 minutes (e.g. **🛜 4:59**), counting down every second.
+The value is fetched once per poll cycle and ticked down locally in between, so
+it does not hit the network every second. Unlimited packages show **∞**.
 
 `python3 run.py --diagnose`, run on the AIS network, prints a **Time left**
 line too. When the countdown reaches zero and the connection drops, the app
 logs you back in as usual, so a fresh countdown starts. To hide it from the
 menu bar, set `"show_time_in_menubar": false` in
-`~/.config/aiswifi/config.json`. (Unlimited packages show **Unlimited**.)
+`~/.config/aiswifi/config.json`.
 
 ---
 

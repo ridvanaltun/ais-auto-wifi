@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import threading
+import time
 from typing import Optional
 
 import AppKit  # type: ignore
@@ -56,14 +57,19 @@ STATUS_TEXT = {
 }
 
 
-def _compact_time(seconds: Optional[int]) -> str:
-    """Seconds → a short clock like "9:59" or "1:05:22" (no leading zero hour/min)."""
-    if seconds is None or seconds < 0:
+def _format_remaining(seconds: Optional[int]) -> str:
+    """
+    Format the remaining session time so it does not read like a wall clock:
+    - 5 minutes or more → whole minutes only, e.g. "12m" (changes once a minute),
+    - under 5 minutes   → a live "M:SS" that ticks every second (e.g. "4:59"),
+    - zero/negative     → "0:00".
+    """
+    if seconds is None:
         return ""
-    h, rem = divmod(int(seconds), 3600)
-    m, s = divmod(rem, 60)
-    if h:
-        return f"{h}:{m:02d}:{s:02d}"
+    seconds = max(0, int(seconds))
+    if seconds >= 300:
+        return f"{seconds // 60}m"
+    m, s = divmod(seconds, 60)
     return f"{m}:{s:02d}"
 
 
@@ -157,18 +163,23 @@ class AISWifiApp(rumps.App):
         status = snap["status"]
         icon = STATUS_ICON.get(status, "🛜")
 
-        # Remaining session time (the portal countdown), when online.
-        remaining_text = snap.get("remaining_text") or ""
-        remaining_seconds = snap.get("remaining_seconds")
-        compact = _compact_time(remaining_seconds)
-        if status == ST_ONLINE and remaining_text and self.cfg.get("show_time_in_menubar", True):
-            self.title = f"{icon} {compact or remaining_text}"
+        # Remaining session time (the portal countdown). It is measured only
+        # every poll cycle; here it is ticked down locally each second from the
+        # measurement time, so the display counts down without extra requests.
+        label = ""
+        if status == ST_ONLINE:
+            if snap.get("remaining_unlimited"):
+                label = "Unlimited"
+            elif snap.get("remaining_seconds") is not None and snap.get("remaining_at"):
+                live = snap["remaining_seconds"] - (time.monotonic() - snap["remaining_at"])
+                label = _format_remaining(live)
+        if label and label != "Unlimited" and self.cfg.get("show_time_in_menubar", True):
+            self.title = f"{icon} {label}"
+        elif label == "Unlimited" and self.cfg.get("show_time_in_menubar", True):
+            self.title = f"{icon} ∞"
         else:
             self.title = icon
-        if status == ST_ONLINE and remaining_text:
-            self.time_item.title = f"Time left: {remaining_text}"
-        else:
-            self.time_item.title = "Time left: —"
+        self.time_item.title = f"Time left: {label}" if label else "Time left: —"
 
         st_text = STATUS_TEXT.get(status, status)
         ssid = snap.get("ssid") or "—"

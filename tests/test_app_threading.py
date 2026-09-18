@@ -131,6 +131,36 @@ class OpenAtLoginMenuTests(unittest.TestCase):
 
 
 @unittest.skipIf(app_mod is None, "requires macOS + rumps")
+class RemainingFormatTests(unittest.TestCase):
+    def test_format_minutes_above_5_and_seconds_below(self):
+        f = app_mod._format_remaining
+        self.assertEqual(f(642), "10m")   # >= 5 min: minutes only
+        self.assertEqual(f(300), "5m")
+        self.assertEqual(f(299), "4:59")  # < 5 min: live M:SS
+        self.assertEqual(f(59), "0:59")
+        self.assertEqual(f(0), "0:00")
+        self.assertEqual(f(-5), "0:00")
+        self.assertEqual(f(None), "")
+
+    def test_refresh_ticks_down_locally_without_network(self):
+        app = mock.Mock()
+        app.cfg = {"show_time_in_menubar": True}
+        app._last_status = app_mod.ST_ONLINE
+        app._ticks = 5
+        app.monitor.state.snapshot.return_value = {
+            "status": app_mod.ST_ONLINE, "ssid": None, "provider": "AIS SUPER WiFi",
+            "message": "Connected", "remaining_seconds": 120,
+            "remaining_at": 1000.0, "remaining_unlimited": False,
+        }
+        with mock.patch.object(app_mod.time, "monotonic", return_value=1005.0):
+            app_mod.AISWifiApp._refresh_ui(app, None)
+        # 120 measured, exactly 5 s elapsed → 1:55, shown in the bar and the menu.
+        self.assertEqual(app.title, "🛜 1:55")
+        self.assertEqual(app.time_item.title, "Time left: 1:55")
+        app.monitor.state.snapshot.assert_called_once()  # no per-second network call
+
+
+@unittest.skipIf(app_mod is None, "requires macOS + rumps")
 class OtpSourceMenuTests(unittest.TestCase):
     def _app(self, source="messages"):
         app = mock.Mock()

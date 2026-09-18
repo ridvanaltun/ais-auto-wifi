@@ -40,6 +40,9 @@ ST_ERROR = "error"             # last attempt failed
 # at least this long (to avoid an SMS flood and the carrier's rate limit).
 OTP_MIN_BACKOFF = 60.0
 
+# State reset for "no known remaining time" (offline/captive/non-AIS).
+_NO_REMAINING = {"remaining_seconds": None, "remaining_at": 0.0, "remaining_unlimited": False}
+
 
 @dataclass
 class State:
@@ -50,9 +53,12 @@ class State:
     message: str = ""
     last_login_ts: float = 0.0
     last_error: str = ""
-    # Remaining session time (portal countdown), when known.
+    # Remaining session time (portal countdown) as last measured, plus the
+    # monotonic time it was measured at so the UI can tick it down locally
+    # without hitting the network every second. None means unknown.
     remaining_seconds: Optional[int] = None
-    remaining_text: str = ""
+    remaining_at: float = 0.0
+    remaining_unlimited: bool = False
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def update(self, **kwargs: Any) -> None:
@@ -70,7 +76,8 @@ class State:
                 "last_login_ts": self.last_login_ts,
                 "last_error": self.last_error,
                 "remaining_seconds": self.remaining_seconds,
-                "remaining_text": self.remaining_text,
+                "remaining_at": self.remaining_at,
+                "remaining_unlimited": self.remaining_unlimited,
             }
 
 
@@ -189,12 +196,12 @@ class Monitor:
             self._status_gave_up = False  # connection changed; re-check next time online
             self._set_state(status=ST_OFFLINE, ssid=ssid,
                             message="No network (Wi-Fi may be off)",
-                            remaining_seconds=None, remaining_text="")
+                            **_NO_REMAINING)
         else:  # CAPTIVE
             self._status_gave_up = False
             self._set_state(status=ST_CAPTIVE, ssid=ssid,
                             message="Connection lost, logging in…",
-                            remaining_seconds=None, remaining_text="")
+                            **_NO_REMAINING)
             logger.info("Captive portal detected: %s",
                         portal.redact(result.portal_url or "(no portal URL)"))
             ok = self._do_login(session, result, ssid)
@@ -350,13 +357,14 @@ class Monitor:
         if info and info.get("online"):
             self._status_gave_up = False
             self._set_state(remaining_seconds=info.get("remaining_seconds"),
-                            remaining_text=info.get("remaining_text") or "")
+                            remaining_at=time.monotonic(),
+                            remaining_unlimited=bool(info.get("unlimited")))
             return
         # Reachable but not an AIS session (e.g. home Wi-Fi). If we did not log
         # in through AIS ourselves, stop polling until the connection changes.
         if self._status_provider is None:
             self._status_gave_up = True
-        self._set_state(remaining_seconds=None, remaining_text="")
+        self._set_state(**_NO_REMAINING)
 
     def _make_otp_provider(self) -> Tuple[Optional[Callable[[], None]],
                                           Callable[[], Optional[str]]]:

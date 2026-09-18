@@ -115,19 +115,26 @@ class _StatusProvider:
 class RemainingTimeTests(unittest.TestCase):
     def test_online_updates_remaining_from_status_provider(self):
         m = _monitor()
-        m._status_provider = _StatusProvider({"online": True, "remaining_seconds": 642,
-                                              "remaining_text": "00:10:42"})
+        m._status_provider = _StatusProvider({"online": True, "remaining_seconds": 642})
         m._update_remaining(object())
         snap = m.state.snapshot()
-        self.assertEqual((snap["remaining_seconds"], snap["remaining_text"]), (642, "00:10:42"))
+        self.assertEqual(snap["remaining_seconds"], 642)
+        self.assertGreater(snap["remaining_at"], 0)   # measurement time recorded for local ticking
+        self.assertFalse(snap["remaining_unlimited"])
+
+    def test_unlimited_account(self):
+        m = _monitor()
+        m._status_provider = _StatusProvider({"online": True, "remaining_seconds": None,
+                                              "unlimited": True})
+        m._update_remaining(object())
+        self.assertTrue(m.state.snapshot()["remaining_unlimited"])
 
     def test_queries_ais_even_without_ssid_or_login(self):
         # macOS often hides the SSID; the countdown must still appear.
         m = _monitor()
-        prov = _StatusProvider({"online": True, "remaining_seconds": 60, "remaining_text": "00:01:00"})
-        m._registry = [prov]
+        m._registry = [_StatusProvider({"online": True, "remaining_seconds": 60})]
         m._update_remaining(object())
-        self.assertEqual(m.state.snapshot()["remaining_text"], "00:01:00")
+        self.assertEqual(m.state.snapshot()["remaining_seconds"], 60)
 
     def test_non_ais_network_gives_up_after_one_query(self):
         m = _monitor()
@@ -135,7 +142,7 @@ class RemainingTimeTests(unittest.TestCase):
         m._registry = [prov]
         m._update_remaining(object())
         m._update_remaining(object())  # should not re-query until reconnect
-        self.assertEqual(m.state.snapshot()["remaining_text"], "")
+        self.assertIsNone(m.state.snapshot()["remaining_seconds"])
         self.assertEqual(prov.calls, 1)
         self.assertTrue(m._status_gave_up)
 
