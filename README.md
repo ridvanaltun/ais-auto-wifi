@@ -30,8 +30,7 @@ The menu bar icon shows the current state at a glance.
 </p>
 
 The menu bar dropdown (with the live session countdown) and the SMS OTP prompt
-in **Ask me in a window** mode. *Rendered previews of the actual UI — replace
-`docs/screenshots/*.png` with your own captures if you like.*
+in **Ask me in a window** mode.
 
 ---
 
