@@ -160,11 +160,34 @@ class LoopTests(unittest.TestCase):
     def test_initial_and_set_auto_do_not_claim_online(self):
         m = _monitor(auto_login=True)
         self.assertEqual(m.state.status, monitor_mod.ST_CHECKING)
-        m.set_auto(False)
-        self.assertEqual(m.state.status, monitor_mod.ST_IDLE)
+        m.set_auto(False)  # does not claim ONLINE; keeps probing to show real status
+        self.assertNotEqual(m.state.status, monitor_mod.ST_ONLINE)
+        self.assertIn("off", m.state.snapshot()["message"])
         m.set_auto(True)
         self.assertEqual(m.state.status, monitor_mod.ST_CHECKING)
         self.assertFalse(m._login_now.is_set())  # a wake-up, not a forced login
+
+    def test_manual_login_shows_countdown_without_auto(self):
+        # Auto login off + user logs in manually: the loop must still probe
+        # ONLINE and populate the countdown (the reported bug).
+        m = _monitor(auto_login=False, poll_interval=15)
+        m._registry = [_StatusProvider({"online": True, "remaining_seconds": 300})]
+        online = network.ProbeResult(network.ONLINE)
+        with mock.patch.object(network, "get_ssid", return_value=None), \
+                mock.patch.object(network, "probe_connectivity", return_value=online):
+            m._cycle(object(), 0.0)
+        snap = m.state.snapshot()
+        self.assertEqual(snap["status"], monitor_mod.ST_ONLINE)
+        self.assertEqual(snap["remaining_seconds"], 300)
+
+    def test_captive_without_auto_does_not_login(self):
+        m = _monitor(auto_login=False)
+        m._do_login = lambda *a: (_ for _ in ()).throw(AssertionError("must not auto-login"))
+        captive = network.ProbeResult(network.CAPTIVE, portal_url="http://10.0.0.1/")
+        with mock.patch.object(network, "get_ssid", return_value=None), \
+                mock.patch.object(network, "probe_connectivity", return_value=captive):
+            m._cycle(object(), 0.0)
+        self.assertEqual(m.state.snapshot()["status"], monitor_mod.ST_CAPTIVE)
 
     def test_unexpected_error_does_not_kill_thread(self):
         m = _monitor(auto_login=True)

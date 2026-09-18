@@ -224,11 +224,13 @@ when 5 minutes or more are left (e.g. **🛜 9m**) and switches to a **live
 The value is fetched once per poll cycle and ticked down locally in between, so
 it does not hit the network every second. Unlimited packages show **∞**.
 
-`python3 run.py --diagnose`, run on the AIS network, prints a **Time left**
-line too. When the countdown reaches zero and the connection drops, the app
-logs you back in as usual, so a fresh countdown starts. To hide it from the
-menu bar, set `"show_time_in_menubar": false` in
-`~/.config/aiswifi/config.json`.
+The countdown appears whenever you are online on AIS — including when you log
+in yourself in a browser and even when **Auto Connect** is off — because the
+app keeps checking your connection regardless. `python3 run.py --diagnose`, run
+on the AIS network, prints a **Time left** line too. When the countdown reaches
+zero and the connection drops, the app logs you back in (if Auto Connect is on),
+so a fresh countdown starts. To hide it from the menu bar, set
+`"show_time_in_menubar": false` in `~/.config/aiswifi/config.json`.
 
 ---
 

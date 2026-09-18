@@ -97,7 +97,6 @@ class Monitor:
         self._wake = threading.Event()       # wake the loop immediately
         self._login_now = threading.Event()  # on wake-up, force a login attempt
         self._ask_otp_cb: Optional[Callable[[], Optional[str]]] = None
-        self._was_auto = bool(cfg.get("auto_login"))
         self._registry = providers_mod.build_registry(cfg.get("ais_login_url"),
                                                       cfg.get("trusted_portal_hosts"),
                                                       cfg.get("ais_status_url"))
@@ -136,12 +135,12 @@ class Monitor:
 
     def set_auto(self, enabled: bool) -> None:
         self.cfg["auto_login"] = enabled
-        if not enabled:
-            self._set_state(status=ST_IDLE, message="Auto login is off")
-        else:
-            # "Connected" is not shown before it is verified; the loop probes right away.
-            self._set_state(status=ST_CHECKING, message="Checking…")
-            self._wake.set()
+        # Either way, re-probe promptly. The loop keeps showing the real
+        # connectivity and countdown even when auto login is off; it just
+        # will not log in by itself.
+        self._set_state(status=ST_CHECKING,
+                        message="Checking…" if enabled else "Auto login is off")
+        self._wake.set()
 
     # ---- Main loop -------------------------------------------------------------
 
@@ -168,23 +167,13 @@ class Monitor:
     def _cycle(self, session, backoff: float) -> float:
         """One iteration of the loop; returns the backoff for the next iteration."""
         interval = float(self.cfg.get("poll_interval", 15))
-
-        if not self.cfg.get("auto_login"):
-            if self._was_auto:
-                # A cycle still running when auto was turned off may have overwritten IDLE.
-                self._was_auto = False
-                self._set_state(status=ST_IDLE, message="Auto login is off")
-            # Auto is off: only wait for a 'Connect Now' request.
-            if self._wake.wait(timeout=1.0):
-                self._wake.clear()
-                if self._take_login_request():
-                    self._attempt_cycle(session, forced=True)
-            return 0.0
-        self._was_auto = True
+        auto = bool(self.cfg.get("auto_login"))
 
         # Refresh the SSID (informational; not required for detection).
         ssid = network.get_ssid()
 
+        # Always probe and show the real status + countdown, even when auto
+        # login is off, so a manual browser login is reflected right away.
         result = network.probe_connectivity(session, timeout=8.0)
         if result.state == network.ONLINE:
             backoff = 0.0
@@ -197,7 +186,13 @@ class Monitor:
             self._set_state(status=ST_OFFLINE, ssid=ssid,
                             message="No network (Wi-Fi may be off)",
                             **_NO_REMAINING)
-        else:  # CAPTIVE
+        elif not auto:  # CAPTIVE, but the user opted out of auto login
+            backoff = 0.0
+            self._status_gave_up = False
+            self._set_state(status=ST_CAPTIVE, ssid=ssid,
+                            message="Not connected — auto login is off (use Connect Now)",
+                            **_NO_REMAINING)
+        else:  # CAPTIVE, auto login on
             self._status_gave_up = False
             self._set_state(status=ST_CAPTIVE, ssid=ssid,
                             message="Connection lost, logging in…",
