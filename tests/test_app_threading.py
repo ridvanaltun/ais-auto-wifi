@@ -195,6 +195,31 @@ class OtpSourceMenuTests(unittest.TestCase):
 
 
 @unittest.skipIf(app_mod is None, "requires macOS + rumps")
+class PermissionsMenuTests(unittest.TestCase):
+    def _sync(self, method, source, fda):
+        app = mock.Mock()
+        app.cfg = {"login_method": method, "otp_source": source}
+        with mock.patch.object(app_mod.otp, "can_read_messages", return_value=fda):
+            app_mod.AISWifiApp._sync_permissions(app)
+        return app
+
+    def test_warns_only_when_messages_otp_needs_missing_access(self):
+        a = self._sync("otp", "messages", False)
+        self.assertIn("⚠️", a.perm_menu.title)
+        self.assertEqual(a.perm_fda.state, 0)
+        self.assertIn("not granted", a.perm_fda.title)
+
+    def test_no_warning_when_access_granted(self):
+        a = self._sync("otp", "messages", True)
+        self.assertEqual(a.perm_menu.title, "Permissions")
+        self.assertEqual(a.perm_fda.state, 1)
+
+    def test_no_warning_for_ask_mode_or_password(self):
+        self.assertEqual(self._sync("otp", "ask", False).perm_menu.title, "Permissions")
+        self.assertEqual(self._sync("password", "messages", False).perm_menu.title, "Permissions")
+
+
+@unittest.skipIf(app_mod is None, "requires macOS + rumps")
 class ActivationPolicyTests(unittest.TestCase):
     def test_run_makes_app_focusable_before_start(self):
         # With a non-framework Python the default "Prohibited" policy prevents

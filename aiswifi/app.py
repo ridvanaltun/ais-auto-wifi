@@ -32,8 +32,9 @@ from . import providers as providers_mod
 
 logger = logging.getLogger("aiswifi.app")
 
-# System Settings → Privacy & Security → Full Disk Access
+# System Settings → Privacy & Security → …
 FULL_DISK_ACCESS_URL = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+LOCATION_URL = "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices"
 
 # Menu bar title (short icon) per status. Emoji are used instead of text.
 STATUS_ICON = {
@@ -122,6 +123,16 @@ class AISWifiApp(rumps.App):
                                           callback=self._on_otp_source_ask)
         self._sync_otp_source_checks()
 
+        # Permissions submenu — shows live state and opens the right Settings
+        # pane. The parent gets a ⚠️ when the current settings need a missing one.
+        self.perm_menu = rumps.MenuItem("Permissions")
+        self.perm_fda = rumps.MenuItem("Full Disk Access", callback=self._on_open_fda)
+        self.perm_location = rumps.MenuItem("Wi-Fi name (Location) — optional",
+                                            callback=self._on_open_location)
+        self.perm_menu.add(self.perm_fda)
+        self.perm_menu.add(self.perm_location)
+        self._sync_permissions()
+
         self.log_item = rumps.MenuItem("Open Logs", callback=self._on_open_log)
         self.about_item = rumps.MenuItem(f"About (v{__version__})", callback=self._on_about)
         self.quit_item = rumps.MenuItem("Quit", callback=self._on_quit)
@@ -138,6 +149,7 @@ class AISWifiApp(rumps.App):
             self.creds_item,
             {"Login Method": [self.method_pw, self.method_otp]},
             {"SMS OTP Code": [self.otp_src_messages, self.otp_src_ask]},
+            self.perm_menu,
             None,
             self.log_item,
             self.about_item,
@@ -201,10 +213,11 @@ class AISWifiApp(rumps.App):
             self._notify_transition(self._last_status, status, detail)
             self._last_status = status
 
-        # Pick up Login Items changes made in System Settings.
+        # Pick up Login Items / permission changes made in System Settings.
         self._ticks += 1
         if self._ticks % 10 == 0:
             self._sync_login_item()
+            self._sync_permissions()
 
     def _notify(self, title: str, message: str) -> None:
         """Show a notification (main thread). Silently skip if there is no notification center."""
@@ -335,6 +348,25 @@ class AISWifiApp(rumps.App):
         source = self.cfg.get("otp_source", "messages")
         self.otp_src_messages.state = 1 if source == "messages" else 0
         self.otp_src_ask.state = 1 if source == "ask" else 0
+
+    def _sync_permissions(self) -> None:
+        """Reflect permission state in the Permissions submenu (live)."""
+        fda_ok = otp.can_read_messages()
+        self.perm_fda.state = 1 if fda_ok else 0
+        self.perm_fda.title = ("Full Disk Access: granted" if fda_ok
+                               else "Full Disk Access: not granted — for SMS OTP auto-read")
+        # A ⚠️ on the parent only when the current settings actually need it:
+        # SMS OTP method reading the code from Messages, but access is missing.
+        needs_fda = (self.cfg.get("login_method") == "otp"
+                     and self.cfg.get("otp_source") == "messages" and not fda_ok)
+        self.perm_menu.title = "Permissions  ⚠️" if needs_fda else "Permissions"
+
+    def _on_open_fda(self, _sender) -> None:
+        self._explain_full_disk_access()
+
+    def _on_open_location(self, _sender) -> None:
+        _bring_to_front()
+        subprocess.run(["open", LOCATION_URL], check=False)
 
     def _on_set_credentials(self, _sender) -> None:
         # For which provider? The preferred one if set, otherwise AIS.

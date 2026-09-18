@@ -151,6 +151,13 @@ with an **Open Settings** button that takes you to the right pane.
 Rebuilding the app with `make_app.py` gives it a new signature, so macOS may
 require you to turn the permission off and on again after a rebuild.
 
+The menu's **Permissions** submenu shows whether Full Disk Access is granted
+and marks itself with a ⚠️ when your current settings need it (SMS OTP reading
+from Messages without access); click the item to open the right Settings pane.
+Note: on a captive portal the forwarded SMS cannot reach the Mac anyway (it
+needs internet you do not have yet), so **Ask me in a window** is the reliable
+OTP choice and needs no permission.
+
 The **Messages : readable / unreadable** line in the output of
 `python3 run.py --diagnose` shows whether the permission works.
 
