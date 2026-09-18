@@ -1,0 +1,18 @@
+# AIS Wi-Fi Auto-Login — bağımlılıklar
+# Kurulum:  pip3 install -r requirements.txt
+
+# Menü çubuğu (tray) arayüzü
+rumps>=0.4.0
+
+# HTTP istekleri (captive portal yoklama + form gönderme)
+requests>=2.28
+
+# Giriş sayfasındaki HTML formunu çözümleme
+beautifulsoup4>=4.11
+
+# Kimlik bilgilerini macOS Keychain'de saklama
+keyring>=24.0
+
+# SSID okumak için (Konum izni ile). rumps zaten pyobjc çeker;
+# CoreWLAN çerçevesi SSID için ayrıca gereklidir.
+pyobjc-framework-CoreWLAN>=9.0

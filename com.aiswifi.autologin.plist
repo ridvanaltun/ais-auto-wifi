@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AIS Wi-Fi Auto-Login — açılışta otomatik başlatma (LaunchAgent).
+
+  KURULUM:
+  1) Aşağıdaki iki YOLU kendi bilgisayarındakiyle değiştir:
+       - /usr/bin/python3            -> `which python3` çıktısı
+       - /FULL/PATH/TO/ais-wifi-autologin -> bu klasörün tam yolu (`pwd`)
+  2) Bu dosyayı kopyala:
+       cp com.aiswifi.autologin.plist ~/Library/LaunchAgents/
+  3) Yükle ve başlat:
+       launchctl load  ~/Library/LaunchAgents/com.aiswifi.autologin.plist
+  Durdurmak / kaldırmak için:
+       launchctl unload ~/Library/LaunchAgents/com.aiswifi.autologin.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.aiswifi.autologin</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/FULL/PATH/TO/ais-wifi-autologin/run.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/FULL/PATH/TO/ais-wifi-autologin</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/aiswifi.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/aiswifi.err.log</string>
+</dict>
+</plist>
