@@ -19,7 +19,7 @@ _long_description = _readme.read_text(encoding="utf-8") if _readme.exists() else
 setup(
     name="aiswifi",
     version="1.0.0",
-    description="macOS menu bar app that automatically logs back in to AIS SUPER WiFi and similar captive portal networks.",
+    description="macOS menu bar app that auto-logs back in to Thailand's AIS SUPER WiFi (and similar captive portals).",
     long_description=_long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(exclude=["tests", "tests.*"]),

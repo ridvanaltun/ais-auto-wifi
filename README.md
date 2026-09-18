@@ -1,10 +1,15 @@
 # AIS Wi-Fi Auto-Login 🛜
 
+> 🇹🇭 **Made for Thailand.** This app targets **AIS SUPER WiFi**, the free
+> captive-portal Wi-Fi run by the Thai carrier AIS. If you are not in Thailand
+> or do not use AIS, it will most likely not be useful to you — though its
+> generic captive-portal fallback may work on some other networks.
+
 A small macOS menu bar (tray) app that **automatically logs you back in**
 when the connection drops on free captive-portal Wi-Fi networks such as
 **AIS SUPER WiFi**.
 
-You're sitting in a café, the connection drops every 30 minutes, and each time
+You're sitting in a café in Thailand, the connection drops every 30 minutes, and each time
 you have to enter your phone number + an SMS OTP. This app keeps watching the
 connection in the background; as soon as it notices a drop it finds the
 portal, logs in with your credentials and verifies that you're online again.
