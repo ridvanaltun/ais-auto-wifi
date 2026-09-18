@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  AIS Wi-Fi Auto-Login — açılışta otomatik başlatma (LaunchAgent).
+  AIS Wi-Fi Auto-Login — start automatically at login (LaunchAgent).
 
-  KURULUM:
-  1) Aşağıdaki iki YOLU kendi bilgisayarındakiyle değiştir:
-       - /usr/bin/python3            -> `which python3` çıktısı
-       - /FULL/PATH/TO/ais-wifi-autologin -> bu klasörün tam yolu (`pwd`)
-  2) Bu dosyayı kopyala:
+  SETUP:
+  1) Replace the two PATHS below with the ones on your machine:
+       - /usr/bin/python3            -> output of `which python3`
+       - /FULL/PATH/TO/ais-wifi-autologin -> full path of this folder (`pwd`)
+  2) Copy this file:
        cp com.aiswifi.autologin.plist ~/Library/LaunchAgents/
-  3) Yükle ve başlat:
+  3) Load and start it:
        launchctl load  ~/Library/LaunchAgents/com.aiswifi.autologin.plist
-  Durdurmak / kaldırmak için:
+  NOTE: To read the SMS OTP from Messages, Full Disk Access must be granted to
+  THIS python3 (Terminal's permission does not apply when started by launchd).
+  To stop / remove:
        launchctl unload ~/Library/LaunchAgents/com.aiswifi.autologin.plist
 -->
 <plist version="1.0">

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-AIS Wi-Fi Auto-Login — başlatıcı.
+AIS Wi-Fi Auto-Login — launcher.
 
-Kullanım:
-  python3 run.py             # menü çubuğu uygulamasını başlat (rumps gerekir)
-  python3 run.py --diagnose  # ağ/OTP/SSID teşhisi (arayüz açmaz)
-  python3 run.py --version   # sürümü yazdır
+Usage:
+  python3 run.py             # start the menu bar app (requires rumps)
+  python3 run.py --diagnose  # network/OTP/SSID diagnostics (no UI)
+  python3 run.py --version   # print the version
 
-Not: --diagnose ve --version, rumps kurulu olmasa da çalışır.
+Note: --diagnose and --version work even without rumps installed.
 """
 
 from __future__ import annotations
@@ -15,53 +15,65 @@ from __future__ import annotations
 import sys
 
 
+def _mask(code: str) -> str:
+    """Don't print the full OTP to the screen/a report (it may still be valid)."""
+    return "•" * max(0, len(code) - 2) + code[-2:]
+
+
 def _diagnose() -> int:
-    """Arayüz açmadan ağ durumunu ve yardımcıları test et."""
+    """Test the network state and helpers without opening the UI."""
     from aiswifi import config as config_mod
     from aiswifi import network, otp
     from aiswifi import providers as providers_mod
 
     config_mod.setup_logging(verbose=True)
-    print("== AIS Wi-Fi Auto-Login — Teşhis ==\n")
+    print("== AIS Wi-Fi Auto-Login — Diagnostics ==\n")
 
     cfg = config_mod.load_config()
-    print(f"Ayar dosyası : {config_mod.CONFIG_PATH}")
-    print(f"Log dosyası  : {config_mod.LOG_PATH}")
-    print(f"Yöntem       : {cfg.get('login_method')}")
-    print(f"OTP kaynağı  : {cfg.get('otp_source')}\n")
+    print(f"Config file  : {config_mod.CONFIG_PATH}")
+    print(f"Log file     : {config_mod.LOG_PATH}")
+    print(f"Method       : {cfg.get('login_method')}")
+    print(f"OTP source   : {cfg.get('otp_source')}\n")
 
     ssid = network.get_ssid()
-    print(f"SSID         : {ssid or '(okunamadı — Konum izni gerekebilir)'}")
+    print(f"SSID         : {ssid or '(unreadable — Location permission may be required)'}")
 
     iface = network.get_wifi_interface()
-    print(f"Wi-Fi arayüz : {iface}")
+    print(f"Wi-Fi iface  : {iface}")
 
-    print("\nBağlantı yoklanıyor…")
+    print("\nProbing connectivity…")
     result = network.probe_connectivity(timeout=8.0)
-    print(f"Durum        : {result.state}")
+    print(f"Status       : {result.state}")
     if result.portal_url:
-        print(f"Portal adresi: {result.portal_url}")
+        print(f"Portal URL   : {result.portal_url}")
 
     registry = providers_mod.build_registry(cfg.get("ais_login_url"))
     provider = providers_mod.detect_provider(
         registry, ssid, result.portal_url, result.body,
         preferred_key=cfg.get("preferred_provider"),
     )
-    print(f"Sağlayıcı    : {provider.name if provider else '(bulunamadı)'}")
+    print(f"Provider     : {provider.name if provider else '(none found)'}")
 
     if provider:
-        phone, password = config_mod.get_credentials(provider.key)
-        print(f"Telefon kayıt: {'var' if phone else 'YOK'}")
-        print(f"Şifre kayıt  : {'var' if password else 'YOK'}")
+        try:
+            phone, password = config_mod.get_credentials(provider.key, raise_errors=True)
+            print(f"Phone saved  : {'yes' if phone else 'NO'}")
+            print(f"Password set : {'yes' if password else 'NO'}")
+        except config_mod.KeychainError as exc:
+            print(f"Credentials  : unreadable ({exc})")
 
-    print("\nSon 5 dk içinde SMS OTP aranıyor…")
-    code = otp.read_latest_otp(within_seconds=300)
-    if code:
-        print(f"Bulunan OTP  : {code}")
+    print("\nChecking Messages (SMS) access…")
+    if not otp.can_read_messages():
+        print("Messages     : unreadable (no Full Disk Access, or chat.db not found)")
     else:
-        print("OTP bulunamadı (Mesajlar erişimi/Full Disk Access ya da forwarding kapalı olabilir).")
+        print("Messages     : readable")
+        code = otp.read_latest_otp(within_seconds=300)
+        if code:
+            print(f"OTP (last 5m): {_mask(code)} ({len(code)} digits)")
+        else:
+            print("OTP (last 5m): not found (is Text Message Forwarding on?)")
 
-    print("\nTeşhis tamamlandı.")
+    print("\nDiagnostics complete.")
     return 0
 
 
@@ -79,14 +91,14 @@ def main(argv=None) -> int:
     if "--diagnose" in argv or "-d" in argv:
         return _diagnose()
 
-    # Normal mod: menü çubuğu uygulaması
+    # Normal mode: menu bar app
     try:
         from aiswifi.app import run
     except ImportError as exc:
-        print("Menü çubuğu uygulaması için 'rumps' gerekli.", file=sys.stderr)
-        print(f"Ayrıntı: {exc}", file=sys.stderr)
-        print("Kurulum: pip install rumps", file=sys.stderr)
-        print("Sadece test için: python3 run.py --diagnose", file=sys.stderr)
+        print("The menu bar app requires 'rumps'.", file=sys.stderr)
+        print(f"Details: {exc}", file=sys.stderr)
+        print("Install: pip install rumps", file=sys.stderr)
+        print("For testing only: python3 run.py --diagnose", file=sys.stderr)
         return 1
     run()
     return 0

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""AIS Wi-Fi Auto-Login — paketleme betiği.
+"""AIS Wi-Fi Auto-Login — packaging script.
 
-Yerel kurulum (geliştirme):
+Local (development) install:
     pip3 install -e .
 
-Ardından komut satırından:
+Then, from the command line:
     aiswifi --diagnose
     aiswifi
 """
@@ -19,10 +19,12 @@ _long_description = _readme.read_text(encoding="utf-8") if _readme.exists() else
 setup(
     name="aiswifi",
     version="1.0.0",
-    description="AIS SUPER WiFi ve benzeri captive portal ağlarına otomatik yeniden giriş yapan macOS menü çubuğu uygulaması.",
+    description="macOS menu bar app that automatically logs back in to AIS SUPER WiFi and similar captive portal networks.",
     long_description=_long_description,
     long_description_content_type="text/markdown",
-    packages=find_packages(),
+    packages=find_packages(exclude=["tests", "tests.*"]),
+    # The `aiswifi` command calls run:main; run.py is a single module at the repo root.
+    py_modules=["run"],
     python_requires=">=3.9",
     install_requires=[
         "rumps>=0.4.0",

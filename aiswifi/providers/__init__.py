@@ -1,10 +1,10 @@
 """
-Sağlayıcı kayıt defteri ve otomatik tespit.
+Provider registry and automatic detection.
 
-Yeni bir sağlayıcı eklemek için:
-  1) Bu klasöre yeni bir dosya oluşturun (ör. `truemove.py`),
-  2) `BaseProvider`tan türeyen bir sınıf yazın,
-  3) Aşağıdaki `build_registry()` içine ekleyin.
+To add a new provider:
+  1) Create a new file in this folder (e.g. `truemove.py`),
+  2) Write a class that derives from `BaseProvider`,
+  3) Add it to `build_registry()` below.
 """
 
 from __future__ import annotations
@@ -18,12 +18,12 @@ from .generic import GenericProvider
 
 def build_registry(ais_login_url: Optional[str] = None) -> List[BaseProvider]:
     """
-    Tanıma sırasına göre sağlayıcı listesini oluştur.
-    ÖNEMLİ: GenericProvider her zaman en SONDA olmalı (o her şeyle eşleşir).
+    Build the provider list in detection order.
+    IMPORTANT: GenericProvider must always be LAST (it matches everything).
     """
     return [
         AISProvider(login_url=ais_login_url),
-        # Buraya yeni sağlayıcılar eklenebilir, ör:
+        # New providers can be added here, e.g.:
         # TrueMoveProvider(),
         GenericProvider(),
     ]
@@ -35,8 +35,8 @@ def detect_provider(registry: List[BaseProvider],
                     page_html: Optional[str],
                     preferred_key: Optional[str] = None) -> Optional[BaseProvider]:
     """
-    Mevcut ağa uyan ilk sağlayıcıyı döndür.
-    `preferred_key` verilmişse ve eşleşiyorsa ona öncelik verilir.
+    Return the first provider that matches the current network.
+    If `preferred_key` is given and it matches, it takes precedence.
     """
     if preferred_key:
         for p in registry:
