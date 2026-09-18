@@ -1,5 +1,7 @@
 # AIS Wi-Fi Auto-Login 🛜
 
+[![CI](https://github.com/ridvanaltun/ais-auto-wifi/actions/workflows/ci.yml/badge.svg)](https://github.com/ridvanaltun/ais-auto-wifi/actions/workflows/ci.yml)
+
 > 🇹🇭 **Made for Thailand.** This app targets **AIS SUPER WiFi**, the free
 > captive-portal Wi-Fi run by the Thai carrier AIS. If you are not in Thailand
 > or do not use AIS, it will most likely not be useful to you — though its
@@ -238,6 +240,29 @@ Unit tests with no extra dependencies (standard `unittest`):
 ```bash
 python3 -m unittest discover -s tests -v
 ```
+
+---
+
+## Releases
+
+Releases are cut from GitHub, not by hand. In the repo's **Actions** tab, run
+the **Release** workflow and choose a bump (**patch** / minor / major). It:
+
+- bumps the version automatically (single source of truth:
+  `aiswifi/__init__.py`),
+- commits and tags it (`vX.Y.Z`),
+- publishes a **GitHub Release** whose changelog is **generated automatically**
+  from the commits since the previous release, and
+- attaches a downloadable, self-contained **.app** (zipped) when the build
+  succeeds — otherwise the release still stands with GitHub's source archives.
+
+Every push and pull request runs the test suite via the **CI** workflow.
+
+**Opening the downloaded app:** it is ad-hoc signed (no Apple Developer ID), so
+macOS blocks it the first time — right-click the app → **Open** → **Open**, or
+run `xattr -dr com.apple.quarantine "AIS Wi-Fi Auto-Login.app"`. You can also
+grab the source archive from any release and build it locally with
+`python3 make_app.py`.
 
 ---
 

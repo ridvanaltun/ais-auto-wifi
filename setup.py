@@ -11,14 +11,19 @@ Then, from the command line:
 
 from setuptools import setup, find_packages
 import pathlib
+import re
 
 _here = pathlib.Path(__file__).parent
 _readme = (_here / "README.md")
 _long_description = _readme.read_text(encoding="utf-8") if _readme.exists() else ""
 
+# Single source of truth for the version: aiswifi/__init__.py.
+_init = (_here / "aiswifi" / "__init__.py").read_text(encoding="utf-8")
+_version = re.search(r'^__version__\s*=\s*"([^"]+)"', _init, re.MULTILINE).group(1)
+
 setup(
     name="aiswifi",
-    version="1.0.0",
+    version=_version,
     description="macOS menu bar app that auto-logs back in to Thailand's AIS SUPER WiFi (and similar captive portals).",
     long_description=_long_description,
     long_description_content_type="text/markdown",
