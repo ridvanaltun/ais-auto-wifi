@@ -14,6 +14,12 @@ from pathlib import Path
 from aiswifi import __bundle_id__, __version__
 
 
+# make_app builds a launcher that embeds the LOCAL Python's home path, so the
+# built .app runs only where that Python lives. On CI the interpreter comes
+# from actions/setup-python and is laid out differently, so this heavy
+# integration test is skipped there (the release ships a py2app bundle instead).
+@unittest.skipIf(os.environ.get("CI"),
+                 "make_app builds a machine-local launcher; skipped on CI")
 @unittest.skipUnless(sys.platform == "darwin" and shutil.which("clang") and shutil.which("codesign"),
                      "requires macOS with the Xcode Command Line Tools")
 class MakeAppTests(unittest.TestCase):
