@@ -103,6 +103,8 @@ class OpenAtLoginMenuTests(unittest.TestCase):
     def toggle(self, current, after=None, clicked=0):
         li = app_mod.login_item
         fake_app = mock.Mock()
+        fake_app.cfg = {"language": "en"}
+        fake_app._t = app_mod.AISWifiApp._t.__get__(fake_app)  # real translations
         with mock.patch.object(li, "status", return_value=current), \
                 mock.patch.object(li, "set_enabled", return_value=(after, None)) as set_enabled, \
                 mock.patch.object(li, "open_login_items_settings") as open_settings, \
@@ -142,22 +144,28 @@ class RemainingFormatTests(unittest.TestCase):
         self.assertEqual(f(-5), "0:00")
         self.assertEqual(f(None), "")
 
-    def test_refresh_ticks_down_locally_without_network(self):
+    def test_refresh_ticks_down_locally(self):
         app = mock.Mock()
-        app.cfg = {"show_time_in_menubar": True}
-        app._last_status = app_mod.ST_ONLINE
-        app._ticks = 5
-        app.monitor.state.snapshot.return_value = {
+        app.cfg = {"show_time_in_menubar": True, "language": "en"}
+        app._t = app_mod.AISWifiApp._t.__get__(app)  # real translations
+        snap = {
             "status": app_mod.ST_ONLINE, "ssid": None, "provider": "AIS SUPER WiFi",
             "message": "Connected", "remaining_seconds": 120,
             "remaining_at": 1000.0, "remaining_unlimited": False,
         }
         with mock.patch.object(app_mod.time, "monotonic", return_value=1005.0):
-            app_mod.AISWifiApp._refresh_ui(app, None)
+            app_mod.AISWifiApp._render(app, snap)
         # 120 measured, exactly 5 s elapsed → 1:55, shown in the bar and the menu.
         self.assertEqual(app.title, "🛜 1:55")
         self.assertEqual(app.time_item.title, "Time left: 1:55")
-        app.monitor.state.snapshot.assert_called_once()  # no per-second network call
+
+    def test_render_thai_status_label(self):
+        app = mock.Mock()
+        app.cfg = {"show_time_in_menubar": True, "language": "th"}
+        app._t = app_mod.AISWifiApp._t.__get__(app)
+        app_mod.AISWifiApp._render(app, {"status": app_mod.ST_ONLINE, "ssid": None,
+                                         "provider": None, "message": ""})
+        self.assertIn("เชื่อมต่อแล้ว", app.status_item.title)  # "Connected" in Thai
 
 
 @unittest.skipIf(app_mod is None, "requires macOS + rumps")
@@ -198,7 +206,8 @@ class OtpSourceMenuTests(unittest.TestCase):
 class PermissionsMenuTests(unittest.TestCase):
     def _sync(self, method, source, fda):
         app = mock.Mock()
-        app.cfg = {"login_method": method, "otp_source": source}
+        app.cfg = {"login_method": method, "otp_source": source, "language": "en"}
+        app._t = app_mod.AISWifiApp._t.__get__(app)  # real translations
         with mock.patch.object(app_mod.otp, "can_read_messages", return_value=fda):
             app_mod.AISWifiApp._sync_permissions(app)
         return app
@@ -217,6 +226,41 @@ class PermissionsMenuTests(unittest.TestCase):
     def test_no_warning_for_ask_mode_or_password(self):
         self.assertEqual(self._sync("otp", "ask", False).perm_menu.title, "Permissions")
         self.assertEqual(self._sync("password", "messages", False).perm_menu.title, "Permissions")
+
+
+@unittest.skipIf(app_mod is None, "requires macOS + rumps")
+class LanguageMenuTests(unittest.TestCase):
+    def test_selecting_thai_persists_and_reapplies(self):
+        app = mock.Mock()
+        app.cfg = {"language": "en"}
+        with mock.patch.object(app_mod.config_mod, "save_config") as save:
+            app_mod.AISWifiApp._set_language(app, "th")
+        self.assertEqual(app.cfg["language"], "th")
+        save.assert_called_once()
+        app._apply_language.assert_called_once()
+
+    def test_sync_lang_checks(self):
+        app = mock.Mock()
+        app.cfg = {"language": "th"}
+        app_mod.AISWifiApp._sync_lang_checks(app)
+        self.assertEqual((app.lang_en.state, app.lang_th.state), (0, 1))
+
+    def test_retitle_sets_all_titles_without_missing_keys(self):
+        app = mock.Mock()
+        app.cfg = {"language": "th"}
+        app._t = app_mod.AISWifiApp._t.__get__(app)
+        app_mod.AISWifiApp._retitle(app)
+        self.assertEqual(app.login_now_item.title, "เชื่อมต่อเดี๋ยวนี้")  # Connect Now
+        self.assertEqual(app.quit_item.title, "ออก")                      # Quit
+        self.assertIn("v", app.about_item.title)                          # About (v…)
+
+    def test_apply_language_reapplies_everything(self):
+        app = mock.Mock()
+        app.cfg = {"language": "en"}
+        app_mod.AISWifiApp._apply_language(app)
+        app._retitle.assert_called_once()
+        app._render.assert_called_once()
+        app._sync_login_item.assert_called_once()
 
 
 @unittest.skipIf(app_mod is None, "requires macOS + rumps")

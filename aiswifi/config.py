@@ -70,12 +70,15 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # e.g. ["10.0.0.1"] if your AIS hotspot's login form posts to a gateway.
     # Credentials are never sent to any other host.
     "trusted_portal_hosts": [],
+    # UI language: "en" (default) or "th" (Thai). Changeable from the menu.
+    "language": "en",
 }
 
 # Settings that only accept specific values.
 _CHOICES: Dict[str, Tuple[str, ...]] = {
     "login_method": ("password", "otp"),
     "otp_source": ("messages", "ask", "none"),
+    "language": ("en", "th"),
 }
 
 

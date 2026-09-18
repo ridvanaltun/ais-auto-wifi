@@ -21,7 +21,7 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from . import network, otp, portal
+from . import i18n, network, otp, portal
 from . import providers as providers_mod
 from . import config as config_mod
 
@@ -139,7 +139,7 @@ class Monitor:
         # connectivity and countdown even when auto login is off; it just
         # will not log in by itself.
         self._set_state(status=ST_CHECKING,
-                        message="Checking…" if enabled else "Auto login is off")
+                        message=self._t("msg.checking") if enabled else self._t("msg.auto_off"))
         self._wake.set()
 
     # ---- Main loop -------------------------------------------------------------
@@ -158,7 +158,7 @@ class Monitor:
                     # monitoring silently stops and the icon freezes (e.g. "Connected").
                     logger.error("Unexpected error in the monitor loop: %s", portal.redact(exc))
                     logger.debug("Details:\n%s", portal.redact(traceback.format_exc()))
-                    self._set_state(status=ST_ERROR, message="Unexpected error (Open Logs)",
+                    self._set_state(status=ST_ERROR, message=self._t("msg.unexpected"),
                                     last_error="internal")
                     self._stop.wait(5.0)
         finally:
@@ -178,24 +178,24 @@ class Monitor:
         if result.state == network.ONLINE:
             backoff = 0.0
             self._set_state(status=ST_ONLINE, ssid=ssid,
-                            message="Connected", last_error="")
+                            message=self._t("msg.connected"), last_error="")
             self._update_remaining(session)
         elif result.state == network.OFFLINE:
             backoff = 0.0
             self._status_gave_up = False  # connection changed; re-check next time online
             self._set_state(status=ST_OFFLINE, ssid=ssid,
-                            message="No network (Wi-Fi may be off)",
+                            message=self._t("msg.no_network"),
                             **_NO_REMAINING)
         elif not auto:  # CAPTIVE, but the user opted out of auto login
             backoff = 0.0
             self._status_gave_up = False
             self._set_state(status=ST_CAPTIVE, ssid=ssid,
-                            message="Not connected — auto login is off (use Connect Now)",
+                            message=self._t("msg.captive_auto_off"),
                             **_NO_REMAINING)
         else:  # CAPTIVE, auto login on
             self._status_gave_up = False
             self._set_state(status=ST_CAPTIVE, ssid=ssid,
-                            message="Connection lost, logging in…",
+                            message=self._t("msg.connection_lost"),
                             **_NO_REMAINING)
             logger.info("Captive portal detected: %s",
                         portal.redact(result.portal_url or "(no portal URL)"))
@@ -233,12 +233,12 @@ class Monitor:
         ssid = network.get_ssid()
         result = network.probe_connectivity(session, timeout=8.0)
         if result.state == network.ONLINE:
-            self._set_state(status=ST_ONLINE, ssid=ssid, message="Already connected")
+            self._set_state(status=ST_ONLINE, ssid=ssid, message=self._t("msg.already_connected"))
             return
         if result.state == network.OFFLINE and not forced:
-            self._set_state(status=ST_OFFLINE, ssid=ssid, message="No network")
+            self._set_state(status=ST_OFFLINE, ssid=ssid, message=self._t("msg.no_network_short"))
             return
-        self._set_state(status=ST_LOGGING_IN, ssid=ssid, message="Logging in…")
+        self._set_state(status=ST_LOGGING_IN, ssid=ssid, message=self._t("msg.logging_in"))
         self._do_login(session, result, ssid)
 
     # ---- Login -----------------------------------------------------------------
@@ -253,7 +253,7 @@ class Monitor:
         )
         if provider is None:
             self._set_state(status=ST_ERROR,
-                            message="No suitable provider found",
+                            message=self._t("msg.no_provider"),
                             last_error="no_provider")
             return False
 
@@ -268,13 +268,13 @@ class Monitor:
         if not phone:
             self._set_state(status=ST_ERROR,
                             provider=provider.name,
-                            message="No credentials — use 'Enter Credentials…'",
+                            message=self._t("msg.no_credentials"),
                             last_error="no_credentials")
             return False
         if method == "password" and not password:
             self._set_state(status=ST_ERROR,
                             provider=provider.name,
-                            message="No password saved — use 'Enter Credentials…'",
+                            message=self._t("msg.no_password"),
                             last_error="no_password")
             return False
 
@@ -287,7 +287,7 @@ class Monitor:
         )
 
         self._set_state(status=ST_LOGGING_IN, provider=provider.name,
-                        message=f"{provider.name}: logging in…")
+                        message=self._t("msg.provider_logging_in", provider=provider.name))
 
         # OTP: every attempt triggers a NEW SMS and waits ~otp_wait_timeout
         # seconds for the code; so only ONE attempt is made per cycle and the
@@ -312,7 +312,7 @@ class Monitor:
                     self._status_provider = provider
                 self._status_gave_up = False
                 self._set_state(status=ST_ONLINE, provider=provider.name,
-                                message="Login successful 🎉",
+                                message=self._t("msg.login_success"),
                                 last_login_ts=time.time(), last_error="")
                 self._update_remaining(session)
                 return True
@@ -321,7 +321,7 @@ class Monitor:
 
         reason = getattr(provider, "last_failure", "") or "Login failed"
         self._set_state(status=ST_ERROR, provider=provider.name,
-                        message=f"{reason} (will retry)",
+                        message=self._t("msg.login_failed_retry", reason=reason),
                         last_error="login_failed")
         return False
 
@@ -379,7 +379,7 @@ class Monitor:
         def ask_user() -> Optional[str]:
             if ask is None:
                 return None
-            self._set_state(message="Waiting for the OTP code (enter it in the dialog)…")
+            self._set_state(message=self._t("msg.waiting_otp_dialog"))
             return ask()
 
         if source == "messages":
@@ -401,7 +401,7 @@ class Monitor:
                                    "may not be granted); the SMS cannot be read automatically.")
                 else:
                     logger.info("Waiting for the SMS OTP (up to %ss)…", timeout)
-                    self._set_state(message="Waiting for the SMS OTP…")
+                    self._set_state(message=self._t("msg.waiting_sms"))
                     code = otp.wait_for_new_otp(baseline, timeout=timeout,
                                                 stop_event=self._stop)
                     if code:
@@ -423,6 +423,9 @@ class Monitor:
         self._ask_otp_cb = cb
 
     # ---- Helpers ---------------------------------------------------------------
+
+    def _t(self, key: str, **kw) -> str:
+        return i18n.t(key, self.cfg.get("language", "en"), **kw)
 
     def _set_state(self, **kwargs: Any) -> None:
         self.state.update(**kwargs)

@@ -114,6 +114,8 @@ python3 run.py
      seconds between failed attempts. **Tip:** once AIS has texted you a
      password, you can save it under **Enter Credentials…** and switch to the
      Password method for hands-off reconnects with no more SMS.
+   The interface is available in **English** (default) and **Thai** — switch it
+   any time from the **Language** submenu (English / ไทย). Your choice is saved.
 3. If you use **SMS OTP**, choose where the code comes from in the
    **SMS OTP Code** submenu:
    - **Read code from Messages** — read it automatically from the Mac's
