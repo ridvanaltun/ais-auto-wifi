@@ -9,20 +9,21 @@ To add a new provider:
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
 from .base import BaseProvider
 from .ais import AISProvider
 from .generic import GenericProvider
 
 
-def build_registry(ais_login_url: Optional[str] = None) -> List[BaseProvider]:
+def build_registry(ais_login_url: Optional[str] = None,
+                   trusted_hosts: Optional[Iterable[str]] = None) -> List[BaseProvider]:
     """
     Build the provider list in detection order.
     IMPORTANT: GenericProvider must always be LAST (it matches everything).
     """
     return [
-        AISProvider(login_url=ais_login_url),
+        AISProvider(login_url=ais_login_url, trusted_hosts=trusted_hosts),
         # New providers can be added here, e.g.:
         # TrueMoveProvider(),
         GenericProvider(),

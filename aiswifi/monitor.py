@@ -86,7 +86,8 @@ class Monitor:
         self._login_now = threading.Event()  # on wake-up, force a login attempt
         self._ask_otp_cb: Optional[Callable[[], Optional[str]]] = None
         self._was_auto = bool(cfg.get("auto_login"))
-        self._registry = providers_mod.build_registry(cfg.get("ais_login_url"))
+        self._registry = providers_mod.build_registry(cfg.get("ais_login_url"),
+                                                      cfg.get("trusted_portal_hosts"))
 
         self.state.status = ST_CHECKING if cfg.get("auto_login") else ST_IDLE
 
@@ -176,6 +177,8 @@ class Monitor:
         else:  # CAPTIVE
             self._set_state(status=ST_CAPTIVE, ssid=ssid,
                             message="Connection lost, logging in…")
+            logger.info("Captive portal detected: %s",
+                        portal.redact(result.portal_url or "(no portal URL)"))
             ok = self._do_login(session, result, ssid)
             if ok:
                 backoff = 0.0
@@ -187,12 +190,15 @@ class Monitor:
                 if self.cfg.get("login_method") == "otp":
                     backoff = max(backoff, OTP_MIN_BACKOFF)
 
-        # If 'Connect Now' arrives while waiting, wake up and try right away.
+        # If 'Connect Now' arrives while waiting, wake up and try right away;
+        # then start the wait over, so the forced attempt is not immediately
+        # followed by an automatic one (with OTP that would be a second SMS).
         wait_for = max(interval, backoff)
-        if self._wake.wait(timeout=wait_for):
+        while self._wake.wait(timeout=wait_for):
             self._wake.clear()
-            if self._take_login_request():
-                self._attempt_cycle(session, forced=True)
+            if self._stop.is_set() or not self._take_login_request():
+                break  # stopping, or a plain wake-up (e.g. auto login turned on): probe now
+            self._attempt_cycle(session, forced=True)
         return backoff
 
     def _take_login_request(self) -> bool:

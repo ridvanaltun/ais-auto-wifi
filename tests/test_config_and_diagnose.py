@@ -40,6 +40,7 @@ class ConfigTests(_TempConfigDir):
             "poll_interval": "15s", "max_retries": 0, "login_method": "sms",
             "auto_login": "yes", "otp_wait_timeout": 45, "unknown": 1,
             "portal_cert_pins": {"portal.example": "ab" * 32},
+            "trusted_portal_hosts": ["10.0.0.1", 5],
         }), encoding="utf-8")
         with self.assertLogs("aiswifi.config", level="WARNING"):
             cfg = config_mod.load_config()
@@ -50,6 +51,7 @@ class ConfigTests(_TempConfigDir):
         self.assertEqual(cfg["auto_login"], d["auto_login"])
         self.assertEqual(cfg["otp_wait_timeout"], 45)
         self.assertEqual(cfg["portal_cert_pins"], {"portal.example": "ab" * 32})
+        self.assertEqual(cfg["trusted_portal_hosts"], [])  # a non-string entry → default
         self.assertNotIn("unknown", cfg)
 
     def test_defaults_are_not_shared_between_loads(self):

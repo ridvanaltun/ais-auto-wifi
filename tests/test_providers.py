@@ -68,6 +68,84 @@ class _FlowSession:
         return _Resp(url)
 
 
+LOGIN_PAGE = """<form method="post" action="%s">
+  <input name="txtMobile" placeholder="phone"><input type="password" name="txtPassword">
+  <input type="submit" name="btnLogin" value="Login">
+</form>"""
+
+DNS_ERROR = requests.ConnectionError("Failed to resolve 'ext-activities.ais.co.th'")
+
+
+class _RouteSession:
+    """URL → page HTML (or exception); records POSTs."""
+
+    def __init__(self, pages):
+        self.pages, self.posts = pages, []
+
+    def get(self, url, **kw):
+        page = self.pages.get(url, DNS_ERROR)
+        if isinstance(page, Exception):
+            raise page
+        return _Resp(url, page)
+
+    def post(self, url, data=None, **kw):
+        self.posts.append((url, data))
+        return _Resp(url, "<html></html>")
+
+
+class PortalCandidateAndTrustTests(unittest.TestCase):
+    """The fixed AIS URL is unreachable before login (walled garden)."""
+
+    def setUp(self):
+        p = mock.patch.object(network, "probe_connectivity",
+                              return_value=network.ProbeResult(network.ONLINE))
+        p.start()
+        self.addCleanup(p.stop)
+        self.ctx = portal.LoginContext(phone="0812345678", password="S3cretPw")
+
+    def login(self, provider, portal_url, pages):
+        s = _RouteSession(pages)
+        ok = provider.login(s, self.ctx, portal_url=portal_url, method="password")
+        return ok, s.posts
+
+    def test_candidates_portal_first_then_fixed_url(self):
+        p = AISProvider()
+        self.assertEqual(p.login_url_candidates("https://wifi.ais.co.th/login?x=1"),
+                         ["https://wifi.ais.co.th/login?x=1", DEFAULT_AIS_LOGIN_URL + "?x=1"])
+        self.assertEqual(p.login_url_candidates(None), [DEFAULT_AIS_LOGIN_URL])
+
+    def test_logs_in_via_the_portal_when_fixed_url_is_unreachable(self):
+        portal_url = "https://wifi.ais.co.th/login?nasid=7"
+        ok, posts = self.login(AISProvider(), portal_url, {portal_url: LOGIN_PAGE % "auth"})
+        self.assertTrue(ok)
+        self.assertEqual(posts[0][0], "https://wifi.ais.co.th/auth")
+
+    def test_credentials_never_sent_to_untrusted_host(self):
+        prov = AISProvider()
+        ok, posts = self.login(prov, "http://10.0.0.1/login", {"http://10.0.0.1/login": LOGIN_PAGE % ""})
+        self.assertFalse(ok)
+        self.assertEqual(posts, [])
+        self.assertIn("10.0.0.1", prov.last_failure)
+
+    def test_trusted_portal_hosts_and_forms_posting_to_ais(self):
+        url = "http://10.0.0.1/login"
+        ok, posts = self.login(AISProvider(trusted_hosts=["10.0.0.1"]), url, {url: LOGIN_PAGE % ""})
+        self.assertTrue(ok)
+        self.assertEqual(posts[0][0], url)
+        # A gateway page whose form posts to an AIS domain is fine without configuration.
+        ok, posts = self.login(AISProvider(), url, {url: LOGIN_PAGE % "https://wifi.ais.co.th/auth"})
+        self.assertTrue(ok)
+        self.assertEqual(posts[0][0], "https://wifi.ais.co.th/auth")
+
+    def test_meta_refresh_interstitial_is_followed(self):
+        hop = "http://10.0.0.1/"
+        pages = {hop: '<meta http-equiv="refresh" content="0;url=https://wifi.ais.co.th/login">',
+                 "https://wifi.ais.co.th/login": LOGIN_PAGE % "auth"}
+        ok, posts = self.login(AISProvider(), hop, pages)
+        self.assertTrue(ok)
+        self.assertEqual(posts[0][0], "https://wifi.ais.co.th/auth")
+
+
 class OtpFlowTests(unittest.TestCase):
     def setUp(self):
         p = mock.patch.object(network, "probe_connectivity",

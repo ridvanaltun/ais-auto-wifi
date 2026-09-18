@@ -16,3 +16,6 @@ keyring>=24.0
 # For reading the SSID (with Location permission). rumps already pulls in
 # pyobjc; the CoreWLAN framework is needed separately for the SSID.
 pyobjc-framework-CoreWLAN>=9.0
+
+# "Open at Login" (macOS login item via SMAppService).
+pyobjc-framework-ServiceManagement>=9.0

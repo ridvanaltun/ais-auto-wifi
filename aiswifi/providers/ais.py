@@ -13,7 +13,7 @@ detection (matches) and the default login URL are customised here.
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Iterable, List, Optional
 from urllib.parse import parse_qsl, unquote_plus, urlsplit, urlunsplit
 
 from .base import BaseProvider
@@ -35,8 +35,32 @@ class AISProvider(BaseProvider):
     key = "ais"
     name = "AIS SUPER WiFi"
 
-    def __init__(self, login_url: Optional[str] = None):
+    def __init__(self, login_url: Optional[str] = None,
+                 trusted_hosts: Optional[Iterable[str]] = None):
         self.login_url = login_url or DEFAULT_AIS_LOGIN_URL
+        # Extra hosts (besides *.ais.co.th) that AIS credentials may be sent to,
+        # from "trusted_portal_hosts" in config.json.
+        self.trusted_hosts = {h.strip().lower() for h in (trusted_hosts or [])
+                              if isinstance(h, str) and h.strip()}
+
+    def login_url_candidates(self, portal_url: Optional[str]) -> List[str]:
+        """
+        1) The page the network actually redirected to: before logging in, the
+           fixed URL is often unreachable because it is outside the portal's
+           walled garden (DNS fails or the connection is reset).
+        2) The fixed login URL, with the portal's session parameters.
+        Credentials are only submitted to trusted hosts (is_trusted_submit_url).
+        """
+        urls = [portal_url] if portal_url else []
+        fixed = self.resolve_login_url(portal_url)
+        if fixed and fixed not in urls:
+            urls.append(fixed)
+        return urls
+
+    def is_trusted_submit_url(self, url: str) -> bool:
+        """AIS credentials only go to AIS domains or hosts the user explicitly trusts."""
+        host = (urlsplit(url).hostname or "").lower()
+        return _is_ais_host(url) or host in self.trusted_hosts
 
     def matches(self, ssid: Optional[str], portal_url: Optional[str],
                 page_html: Optional[str]) -> bool:

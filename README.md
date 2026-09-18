@@ -55,14 +55,26 @@ This command shows the SSID, the Wi-Fi interface, the connection state, the
 detected provider, whether credentials are saved, and the SMS OTP from the
 last 5 minutes. If something is wrong, this is where you'll see it.
 
-### 4. Start the app
+### 4. Install it as a Mac app (recommended)
+
+```bash
+python3 make_app.py --open
+```
+
+This builds **AIS Wi-Fi Auto-Login.app** into `/Applications` (or
+`~/Applications`) and starts it. From then on, start it like any other app —
+from Launchpad, Spotlight or the Applications folder; no Terminal needed. The
+🛜 icon appears in the menu bar (there is no Dock icon).
+
+The app runs the code with the Python you built it with, so keep that Python
+and its installed packages. **Rebuild after updating the code** (quit the app
+first). Building needs the Xcode Command Line Tools (`xcode-select --install`).
+
+To try it without installing, you can also run it straight from the Terminal:
 
 ```bash
 python3 run.py
 ```
-
-The 🛜 icon appears in the menu bar. On first launch, click the icon in the
-top-right corner.
 
 ---
 
@@ -97,16 +109,19 @@ On the iPhone: **Settings → Messages → Text Message Forwarding** → turn on
 Mac. This way the SMS code from AIS also lands in Messages on your Mac.
 
 ### B) Full Disk Access
-To read the Messages database, grant permission to Terminal (or to the .app if
-you packaged the app):
-**System Settings → Privacy & Security → Full Disk Access** → add and check
-Terminal. Then quit and reopen Terminal.
+To read the Messages database, the app needs Full Disk Access:
+**System Settings → Privacy & Security → Full Disk Access** → **+** → add
+**AIS Wi-Fi Auto-Login** from Applications and check it. Then quit and reopen
+the app. (If you run `python3 run.py` from a terminal instead, the permission
+belongs to that terminal app — Terminal, iTerm, your editor… — so add that one.)
 
-> **If you start it with a LaunchAgent (at login):** Terminal's permission
-> does NOT apply; you need to grant it to the Python interpreter written in the
-> plist itself (find the real path with
-> `python3 -c "import sys; print(sys.executable)"` and add that file to the
-> Full Disk Access list with ⌘⇧G).
+macOS **never shows a permission prompt** for Full Disk Access — apps are not
+allowed to ask for it, access is silently denied until you grant it manually.
+When you switch to **SMS OTP** without this permission, the app shows a dialog
+with an **Open Settings** button that takes you to the right pane.
+
+Rebuilding the app with `make_app.py` gives it a new signature, so macOS may
+require you to turn the permission off and on again after a rebuild.
 
 The **Messages : readable / unreadable** line in the output of
 `python3 run.py --diagnose` shows whether the permission works.
@@ -133,20 +148,13 @@ expected and does not affect logging in.
 
 ## Starting automatically at login
 
-To have the app start by itself every time you log in, use the bundled
-`com.aiswifi.autologin.plist` file:
+Turn on **Open at Login** in the app's menu (it is off by default). The app is
+then registered as a macOS login item and starts by itself every time you log
+in. You can also see and turn it off in **System Settings → General → Login
+Items**; if macOS asks for approval there, turn the app on.
 
-1. Open the file in a text editor and fix the two PATHS in it for your machine
-   (`which python3` for the Python path, `pwd` in this folder for the folder path).
-2. Copy and load it:
-   ```bash
-   cp com.aiswifi.autologin.plist ~/Library/LaunchAgents/
-   launchctl load ~/Library/LaunchAgents/com.aiswifi.autologin.plist
-   ```
-3. To remove it:
-   ```bash
-   launchctl unload ~/Library/LaunchAgents/com.aiswifi.autologin.plist
-   ```
+This needs the installed Mac app (see step 4) and macOS 13 or later. When
+running from the Terminal, the menu item explains how to install the app.
 
 ---
 
@@ -166,6 +174,27 @@ under `aiswifi/providers/`. To add a new network:
 For most simple captive portals you may not need to write anything at all:
 `GenericProvider` finds the form automatically and tries by guessing the
 number/password/OTP fields.
+
+---
+
+## Where your credentials are sent
+
+The app first opens the login page the Wi-Fi network actually redirects to
+(before logging in, the fixed AIS address is usually unreachable). Your AIS
+credentials are only ever submitted to **AIS domains (`*.ais.co.th`)**, so a
+fake hotspot that merely names itself "AIS" cannot collect them. If the login
+form of your AIS hotspot posts to another address (for example a gateway such
+as `10.0.0.1`), the app does not log in and writes the host name to the log;
+if you are sure it is the real portal, allow it in
+`~/.config/aiswifi/config.json` and restart the app:
+
+```json
+"trusted_portal_hosts": ["10.0.0.1"]
+```
+
+`python3 run.py --diagnose`, run while the portal is blocking you, shows the
+portal URL and saves the portal page to `~/.config/aiswifi/last_portal.html`
+for troubleshooting (it contains no credentials).
 
 ---
 
@@ -223,7 +252,8 @@ python3 -m unittest discover -s tests -v
 ## Command summary
 
 ```bash
-python3 run.py             # start the menu bar app
+python3 make_app.py --open # build + install the Mac app and start it
+python3 run.py             # start the menu bar app from the Terminal
 python3 run.py --diagnose  # network/OTP/SSID diagnostics without the UI
 python3 run.py --version   # version
 ```

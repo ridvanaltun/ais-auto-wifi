@@ -23,7 +23,7 @@ def _mask(code: str) -> str:
 def _diagnose() -> int:
     """Test the network state and helpers without opening the UI."""
     from aiswifi import config as config_mod
-    from aiswifi import network, otp
+    from aiswifi import login_item, network, otp
     from aiswifi import providers as providers_mod
 
     config_mod.setup_logging(verbose=True)
@@ -33,7 +33,9 @@ def _diagnose() -> int:
     print(f"Config file  : {config_mod.CONFIG_PATH}")
     print(f"Log file     : {config_mod.LOG_PATH}")
     print(f"Method       : {cfg.get('login_method')}")
-    print(f"OTP source   : {cfg.get('otp_source')}\n")
+    print(f"OTP source   : {cfg.get('otp_source')}")
+    print(f"Running as   : {'Mac app' if login_item.running_as_app() else 'script'}")
+    print(f"Open at Login: {login_item.status().replace('_', ' ')}\n")
 
     ssid = network.get_ssid()
     print(f"SSID         : {ssid or '(unreadable — Location permission may be required)'}")
@@ -46,8 +48,17 @@ def _diagnose() -> int:
     print(f"Status       : {result.state}")
     if result.portal_url:
         print(f"Portal URL   : {result.portal_url}")
+    if result.state == network.CAPTIVE and result.body:
+        # The portal page helps to debug logins; it contains no credentials.
+        snapshot = config_mod.CONFIG_DIR / "last_portal.html"
+        try:
+            snapshot.write_text(result.body, encoding="utf-8")
+            print(f"Portal page  : saved to {snapshot}")
+        except OSError as exc:
+            print(f"Portal page  : could not be saved ({exc})")
 
-    registry = providers_mod.build_registry(cfg.get("ais_login_url"))
+    registry = providers_mod.build_registry(cfg.get("ais_login_url"),
+                                            cfg.get("trusted_portal_hosts"))
     provider = providers_mod.detect_provider(
         registry, ssid, result.portal_url, result.body,
         preferred_key=cfg.get("preferred_provider"),
@@ -65,6 +76,10 @@ def _diagnose() -> int:
     print("\nChecking Messages (SMS) access…")
     if not otp.can_read_messages():
         print("Messages     : unreadable (no Full Disk Access, or chat.db not found)")
+        print("               macOS never asks for this permission; grant it manually in")
+        print("               System Settings → Privacy & Security → Full Disk Access to the")
+        print("               app you run this from (e.g. Terminal), then restart that app.")
+        print("               Only needed for the SMS OTP method.")
     else:
         print("Messages     : readable")
         code = otp.read_latest_otp(within_seconds=300)

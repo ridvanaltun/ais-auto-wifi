@@ -26,9 +26,13 @@ from . import monitor as monitor_mod
 from .monitor import (
     ST_CAPTIVE, ST_CHECKING, ST_ERROR, ST_IDLE, ST_LOGGING_IN, ST_OFFLINE, ST_ONLINE,
 )
+from . import login_item, otp
 from . import providers as providers_mod
 
 logger = logging.getLogger("aiswifi.app")
+
+# System Settings → Privacy & Security → Full Disk Access
+FULL_DISK_ACCESS_URL = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
 
 # Menu bar title (short icon) per status. Emoji are used instead of text.
 STATUS_ICON = {
@@ -81,6 +85,10 @@ class AISWifiApp(rumps.App):
         self.login_now_item = rumps.MenuItem("Connect Now", callback=self._on_login_now)
         self.auto_item = rumps.MenuItem("Auto Connect", callback=self._on_toggle_auto)
         self.auto_item.state = 1 if self.cfg.get("auto_login") else 0
+        # Off by default; the user opts in. macOS keeps the real state (it can
+        # also be changed in System Settings → General → Login Items).
+        self.login_item_menu = rumps.MenuItem("Open at Login", callback=self._on_toggle_login_item)
+        self._sync_login_item()
 
         self.creds_item = rumps.MenuItem("Enter Credentials…", callback=self._on_set_credentials)
 
@@ -99,6 +107,7 @@ class AISWifiApp(rumps.App):
             None,  # separator
             self.login_now_item,
             self.auto_item,
+            self.login_item_menu,
             None,
             self.creds_item,
             {"Login Method": [self.method_pw, self.method_otp]},
@@ -111,6 +120,7 @@ class AISWifiApp(rumps.App):
 
         self._last_status: Optional[str] = None
         self._error_notified = False  # no repeated notifications for the same problem
+        self._ticks = 0
 
         # Start the background monitor
         self.monitor.start()
@@ -145,6 +155,11 @@ class AISWifiApp(rumps.App):
         if status != self._last_status:
             self._notify_transition(self._last_status, status, detail)
             self._last_status = status
+
+        # Pick up Login Items changes made in System Settings.
+        self._ticks += 1
+        if self._ticks % 10 == 0:
+            self._sync_login_item()
 
     def _notify(self, title: str, message: str) -> None:
         """Show a notification (main thread). Silently skip if there is no notification center."""
@@ -182,6 +197,37 @@ class AISWifiApp(rumps.App):
         config_mod.save_config(self.cfg)
         self.monitor.set_auto(new_val)
 
+    def _sync_login_item(self) -> None:
+        self.login_item_menu.state = 1 if login_item.status() == login_item.ENABLED else 0
+
+    def _on_toggle_login_item(self, _sender) -> None:
+        current = login_item.status()
+        if current == login_item.UNAVAILABLE:
+            _bring_to_front()
+            rumps.alert(
+                "Open at Login",
+                "Open at Login is available when the app is installed as a Mac app "
+                "(macOS 13 or later).\n\nIn Terminal, in the project folder, run:\n"
+                "python3 make_app.py\n\n"
+                f"then open “{__app_name__}” from Applications.",
+            )
+            return
+        new_status, error = login_item.set_enabled(current != login_item.ENABLED)
+        if error:
+            _bring_to_front()
+            rumps.alert("Open at Login", f"Could not change the login item:\n{error}")
+        elif new_status == login_item.REQUIRES_APPROVAL:
+            _bring_to_front()
+            clicked = rumps.alert(
+                "Open at Login",
+                f"macOS needs your approval: turn on “{__app_name__}” in "
+                "System Settings → General → Login Items.",
+                ok="Open Settings", cancel="Later",
+            )
+            if clicked == 1:
+                login_item.open_login_items_settings()
+        self._sync_login_item()
+
     def _on_method_password(self, _sender) -> None:
         self.cfg["login_method"] = "password"
         config_mod.save_config(self.cfg)
@@ -191,6 +237,36 @@ class AISWifiApp(rumps.App):
         self.cfg["login_method"] = "otp"
         config_mod.save_config(self.cfg)
         self._sync_method_checks()
+        if self.cfg.get("otp_source") == "messages" and not otp.can_read_messages():
+            self._explain_full_disk_access()
+
+    def _explain_full_disk_access(self) -> None:
+        """
+        macOS never prompts for Full Disk Access (reads are silently denied),
+        so the only thing the app can do is explain it and open the right
+        System Settings pane.
+        """
+        _bring_to_front()
+        if login_item.running_as_app():
+            who = (f"add “{__app_name__}” (from the Applications folder), "
+                   "then quit and reopen this app.")
+        else:
+            who = ("add the app you started this from (e.g. Terminal), then quit and "
+                   "restart it. Tip: install it as a Mac app with make_app.py so the "
+                   f"permission belongs to “{__app_name__}” itself.")
+        clicked = rumps.alert(
+            title="Full Disk Access needed",
+            message=(
+                "To read the SMS code automatically, the app needs Full Disk Access "
+                "to the Messages database. macOS does not let apps ask for this "
+                "permission, so it has to be granted manually:\n\n"
+                f"System Settings → Privacy & Security → Full Disk Access → {who}\n\n"
+                "Until then, the app will ask you for the code in a dialog."
+            ),
+            ok="Open Settings", cancel="Later",
+        )
+        if clicked == 1:
+            subprocess.run(["open", FULL_DISK_ACCESS_URL], check=False)
 
     def _sync_method_checks(self) -> None:
         is_pw = self.cfg.get("login_method", "password") == "password"
@@ -199,7 +275,8 @@ class AISWifiApp(rumps.App):
 
     def _on_set_credentials(self, _sender) -> None:
         # For which provider? The preferred one if set, otherwise AIS.
-        registry = providers_mod.build_registry(self.cfg.get("ais_login_url"))
+        registry = providers_mod.build_registry(self.cfg.get("ais_login_url"),
+                                                self.cfg.get("trusted_portal_hosts"))
         pref = self.cfg.get("preferred_provider") or "ais"
         provider = providers_mod.get_provider_by_key(registry, pref) or registry[0]
         saved_phone, saved_password = config_mod.get_credentials(provider.key)

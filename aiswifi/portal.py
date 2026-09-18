@@ -273,12 +273,17 @@ def build_payload(form: Form, values: Dict[str, str], intent: str = "login",
     return payload
 
 
+def form_action_url(form: Form, base_url: str) -> str:
+    """The absolute URL the form is submitted to."""
+    return urljoin(base_url, form.action) if form.action else base_url
+
+
 def submit_form(session, form: Form, values: Dict[str, str], base_url: str,
                 timeout: float = 12.0, intent: str = "login",
                 extra: Optional[Dict[str, str]] = None):
     """Fill in and submit the form, returning the HTTP response."""
     payload = build_payload(form, values, intent=intent, extra=extra)
-    action_url = urljoin(base_url, form.action) if form.action else base_url
+    action_url = form_action_url(form, base_url)
     headers = {"Referer": base_url}
     logger.debug("Submitting form: %s (%s) fields=%s",
                  redact(action_url), form.method, list(payload.keys()))

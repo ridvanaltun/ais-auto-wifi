@@ -127,6 +127,27 @@ class LoopTests(unittest.TestCase):
             m._run()
         self.assertEqual(len(calls), 2)
 
+    def test_forced_attempt_is_followed_by_a_full_wait(self):
+        # 'Connect Now' must not be followed immediately by an automatic attempt
+        # (with OTP that would trigger two SMS back to back).
+        m = _monitor(auto_login=True, poll_interval=15)
+        waits, attempts = [], []
+
+        class RecordingEvent(threading.Event):
+            def wait(self, timeout=None):
+                waits.append(timeout)
+                return self.is_set()
+
+        m._wake = RecordingEvent()
+        m._attempt_cycle = lambda session, forced: attempts.append(forced)
+        m.trigger_login()
+        online = network.ProbeResult(network.ONLINE)
+        with mock.patch.object(network, "get_ssid", return_value=None), \
+                mock.patch.object(network, "probe_connectivity", return_value=online):
+            m._cycle(object(), 0.0)
+        self.assertEqual(attempts, [True])
+        self.assertEqual(waits, [15.0, 15.0])
+
     def test_otp_failure_backoff_floor(self):
         m = _monitor(auto_login=True, login_method="otp", poll_interval=15)
         m._do_login = lambda *a: False

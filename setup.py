@@ -32,6 +32,7 @@ setup(
         "beautifulsoup4>=4.11",
         "keyring>=24.0",
         "pyobjc-framework-CoreWLAN>=9.0",
+        "pyobjc-framework-ServiceManagement>=9.0",
     ],
     entry_points={
         "console_scripts": [

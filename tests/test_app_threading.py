@@ -69,6 +69,68 @@ class AskOtpThreadingTests(unittest.TestCase):
 
 
 @unittest.skipIf(app_mod is None, "requires macOS + rumps")
+class FullDiskAccessGuidanceTests(unittest.TestCase):
+    """macOS never prompts for Full Disk Access, so the app must explain it."""
+
+    def _switch_to_otp(self, readable, otp_source="messages"):
+        fake_app = mock.Mock()
+        fake_app.cfg = {"login_method": "password", "otp_source": otp_source}
+        with mock.patch.object(app_mod.otp, "can_read_messages", return_value=readable), \
+                mock.patch.object(app_mod.config_mod, "save_config"):
+            app_mod.AISWifiApp._on_method_otp(fake_app, None)
+        self.assertEqual(fake_app.cfg["login_method"], "otp")
+        return fake_app._explain_full_disk_access
+
+    def test_explains_only_when_messages_are_unreadable(self):
+        self._switch_to_otp(readable=False).assert_called_once()
+        self._switch_to_otp(readable=True).assert_not_called()
+        self._switch_to_otp(readable=False, otp_source="ask").assert_not_called()
+
+    def test_open_settings_button_opens_full_disk_access_pane(self):
+        for clicked, opened in ((1, True), (0, False)):
+            with mock.patch.object(app_mod.rumps, "alert", return_value=clicked), \
+                    mock.patch.object(app_mod.AppKit, "NSApplication"), \
+                    mock.patch.object(app_mod.subprocess, "run") as run:
+                app_mod.AISWifiApp._explain_full_disk_access(mock.Mock())
+            if opened:
+                run.assert_called_once_with(["open", app_mod.FULL_DISK_ACCESS_URL], check=False)
+            else:
+                run.assert_not_called()
+
+
+@unittest.skipIf(app_mod is None, "requires macOS + rumps")
+class OpenAtLoginMenuTests(unittest.TestCase):
+    def toggle(self, current, after=None, clicked=0):
+        li = app_mod.login_item
+        fake_app = mock.Mock()
+        with mock.patch.object(li, "status", return_value=current), \
+                mock.patch.object(li, "set_enabled", return_value=(after, None)) as set_enabled, \
+                mock.patch.object(li, "open_login_items_settings") as open_settings, \
+                mock.patch.object(app_mod.rumps, "alert", return_value=clicked) as alert, \
+                mock.patch.object(app_mod.AppKit, "NSApplication"):
+            app_mod.AISWifiApp._on_toggle_login_item(fake_app, None)
+        return set_enabled, open_settings, alert
+
+    def test_off_by_default_and_toggles(self):
+        li = app_mod.login_item
+        set_enabled, _, alert = self.toggle(li.DISABLED, li.ENABLED)
+        set_enabled.assert_called_once_with(True)
+        alert.assert_not_called()
+        set_enabled, _, _ = self.toggle(li.ENABLED, li.DISABLED)
+        set_enabled.assert_called_once_with(False)
+
+    def test_explains_how_to_install_when_not_an_app(self):
+        set_enabled, _, alert = self.toggle(app_mod.login_item.UNAVAILABLE)
+        set_enabled.assert_not_called()
+        self.assertIn("make_app.py", alert.call_args[0][1])
+
+    def test_requires_approval_offers_settings(self):
+        li = app_mod.login_item
+        _, open_settings, _ = self.toggle(li.DISABLED, li.REQUIRES_APPROVAL, clicked=1)
+        open_settings.assert_called_once()
+
+
+@unittest.skipIf(app_mod is None, "requires macOS + rumps")
 class ActivationPolicyTests(unittest.TestCase):
     def test_run_makes_app_focusable_before_start(self):
         # With a non-framework Python the default "Prohibited" policy prevents

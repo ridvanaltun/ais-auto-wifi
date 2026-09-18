@@ -59,6 +59,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # instead of the certificate chain. The connectivity probe is NEVER
     # affected. Empty means full verification.
     "portal_cert_pins": {},
+    # Extra hosts (besides *.ais.co.th) that AIS credentials may be sent to,
+    # e.g. ["10.0.0.1"] if your AIS hotspot's login form posts to a gateway.
+    # Credentials are never sent to any other host.
+    "trusted_portal_hosts": [],
 }
 
 # Settings that only accept specific values.
@@ -86,6 +90,8 @@ def _is_valid(key: str, value: Any) -> bool:
         return isinstance(value, str) and bool(value.strip())
     if isinstance(default, dict):
         return isinstance(value, dict)
+    if isinstance(default, list):
+        return isinstance(value, list) and all(isinstance(v, str) for v in value)
     return value is None or isinstance(value, str)  # preferred_provider
 
 
@@ -96,7 +102,8 @@ def ensure_config_dir() -> None:
 
 def load_config() -> Dict[str, Any]:
     """Read settings; fill in missing keys with defaults."""
-    cfg = {k: (dict(v) if isinstance(v, dict) else v) for k, v in DEFAULT_CONFIG.items()}
+    cfg = {k: (type(v)(v) if isinstance(v, (dict, list)) else v)
+           for k, v in DEFAULT_CONFIG.items()}
     try:
         ensure_config_dir()
         if CONFIG_PATH.exists():
