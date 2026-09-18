@@ -88,12 +88,14 @@ python3 run.py
      portal with number + password. No waiting for an SMS. *This is the most
      trouble-free method.* (You can set a Wi-Fi password from the AIS
      app/portal.)
-   - **SMS OTP:** the app enters your number, the portal sends an SMS, and the
-     app reads the code from Messages and enters it automatically (the
-     permissions below are required). If Messages cannot be read, or the code
-     does not arrive in time, it asks you in a small dialog. Since every
-     attempt means a new SMS, the OTP method waits at least 60 seconds
-     between failed attempts.
+   - **SMS OTP:** the app sends your number to AIS, which texts you a code (this
+     code is your account password), and the app reads it from Messages and logs
+     in automatically (the permissions below are required). If Messages cannot be
+     read, or the code does not arrive in time, it asks you in a small dialog.
+     Since every attempt means a new SMS, the OTP method waits at least 60
+     seconds between failed attempts. **Tip:** once AIS has texted you a
+     password, you can save it under **Enter Credentials…** and switch to the
+     Password method for hands-off reconnects with no more SMS.
 3. As long as **Auto Connect** is on, the app handles disconnects on its own.
    You can also trigger it manually at any time with **Connect Now**.
 
@@ -195,14 +197,13 @@ menu bar, set `"show_time_in_menubar": false` in
 
 ## Where your credentials are sent
 
-The app first opens the login page the Wi-Fi network actually redirects to
-(before logging in, the fixed AIS address is usually unreachable). Your AIS
-credentials are only ever submitted to **AIS domains (`*.ais.co.th`)**, so a
-fake hotspot that merely names itself "AIS" cannot collect them. If the login
-form of your AIS hotspot posts to another address (for example a gateway such
-as `10.0.0.1`), the app does not log in and writes the host name to the log;
-if you are sure it is the real portal, allow it in
-`~/.config/aiswifi/config.json` and restart the app:
+The AIS portal (`wifi.ais.co.th`) is a single-page app that authenticates
+through a small JSON API, so the app talks to that API directly rather than
+scraping a form. Your AIS credentials are only ever sent to **AIS domains
+(`*.ais.co.th`)**, so a fake hotspot that merely names itself "AIS" cannot
+collect them. If your AIS hotspot's portal lives on another host (for example
+a gateway such as `10.0.0.1`), tell the app to trust it in
+`~/.config/aiswifi/config.json` and restart:
 
 ```json
 "trusted_portal_hosts": ["10.0.0.1"]

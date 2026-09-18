@@ -7,9 +7,7 @@ import requests
 
 from aiswifi import network, portal
 from aiswifi import providers as providers_mod
-from aiswifi.providers.ais import (
-    DEFAULT_AIS_LOGIN_URL, AISProvider, _hms_to_seconds, parse_status,
-)
+from aiswifi.providers.ais import AISProvider, _hms_to_seconds, parse_status
 from aiswifi.providers.generic import GenericProvider
 
 
@@ -65,18 +63,6 @@ class SessionStatusTests(unittest.TestCase):
 
 
 class AISProviderTests(unittest.TestCase):
-    def test_resolve_login_url_keeps_session_params(self):
-        p = AISProvider()
-        self.assertEqual(p.resolve_login_url(None), DEFAULT_AIS_LOGIN_URL)
-        portal_url = "http://10.0.0.1/login?mac=aa%3Abb&ip=10.0.0.5&sig=AbC%2F%3D"
-        self.assertEqual(p.resolve_login_url(portal_url),
-                         DEFAULT_AIS_LOGIN_URL + "?mac=aa%3Abb&ip=10.0.0.5&sig=AbC%2F%3D")
-
-    def test_resolve_login_url_never_downgrades_or_changes_host(self):
-        p = AISProvider("https://ext-activities.ais.co.th/apps/wifigen/login.aspx?lang=th")
-        out = p.resolve_login_url("http://evil.example/x?lang=en&nasid=7")
-        self.assertEqual(out, "https://ext-activities.ais.co.th/apps/wifigen/login.aspx?lang=th&nasid=7")
-
     def test_matches(self):
         p = AISProvider()
         for ssid in (".@ AIS SUPER WiFi", "AIS_WiFi", "aiswifi"):
@@ -121,82 +107,94 @@ class _FlowSession:
         return _Resp(url)
 
 
-LOGIN_PAGE = """<form method="post" action="%s">
-  <input name="txtMobile" placeholder="phone"><input type="password" name="txtPassword">
-  <input type="submit" name="btnLogin" value="Login">
-</form>"""
-
-DNS_ERROR = requests.ConnectionError("Failed to resolve 'ext-activities.ais.co.th'")
+LOGON_OK = '{"logonStatus":["true"],"replyMessage":["\\"SBR-0000\\";\\"OK\\""],"responseCode":["0000"]}'
+LOGON_BAD = '{"logonStatus":["false"],"replyMessage":["\\"SBR-0408\\";\\"Invalid User/Password\\""],"responseCode":["0000"]}'
+REGISTERED = '{"responseCode":["0000"],"responseMessage":["REGISTERED_SUCCESS"],"username":["0812345678"]}'
 
 
-class _RouteSession:
-    """URL → page HTML (or exception); records POSTs."""
+class _ApiSession:
+    """Fake AIS session recording GET/POST; POSTs answered from `replies`."""
 
-    def __init__(self, pages):
-        self.pages, self.posts = pages, []
+    def __init__(self, replies):
+        self.replies = replies  # path -> body text
+        self.posts = []
+        self.gets = []
 
     def get(self, url, **kw):
-        page = self.pages.get(url, DNS_ERROR)
-        if isinstance(page, Exception):
-            raise page
-        return _Resp(url, page)
+        self.gets.append(url)
+        return _Resp(url, "")
 
     def post(self, url, data=None, **kw):
         self.posts.append((url, data))
-        return _Resp(url, "<html></html>")
+        path = url.rsplit("/", 1)[-1]
+        return _Resp(url, self.replies.get(path, LOGON_BAD))
 
 
-class PortalCandidateAndTrustTests(unittest.TestCase):
-    """The fixed AIS URL is unreachable before login (walled garden)."""
+class AisJsonLoginTests(unittest.TestCase):
+    """AIS authenticates through its JSON API, not an HTML form."""
 
     def setUp(self):
         p = mock.patch.object(network, "probe_connectivity",
                               return_value=network.ProbeResult(network.ONLINE))
         p.start()
         self.addCleanup(p.stop)
-        self.ctx = portal.LoginContext(phone="0812345678", password="S3cretPw")
 
-    def login(self, provider, portal_url, pages):
-        s = _RouteSession(pages)
-        ok = provider.login(s, self.ctx, portal_url=portal_url, method="password")
-        return ok, s.posts
-
-    def test_candidates_portal_first_then_fixed_url(self):
+    def test_api_base_prefers_portal_origin_only_when_ais(self):
         p = AISProvider()
-        self.assertEqual(p.login_url_candidates("https://wifi.ais.co.th/login?x=1"),
-                         ["https://wifi.ais.co.th/login?x=1", DEFAULT_AIS_LOGIN_URL + "?x=1"])
-        self.assertEqual(p.login_url_candidates(None), [DEFAULT_AIS_LOGIN_URL])
+        self.assertEqual(p._api_base("https://wifi.ais.co.th/?sid=1"), "https://wifi.ais.co.th")
+        # Non-AIS host is ignored → default AIS origin (credentials stay on AIS).
+        self.assertEqual(p._api_base("http://10.0.0.1/login"), "https://wifi.ais.co.th")
+        self.assertEqual(p._api_base(None), "https://wifi.ais.co.th")
+        # A host the user explicitly trusts is honoured.
+        self.assertEqual(AISProvider(trusted_hosts=["10.0.0.1"])._api_base("http://10.0.0.1/x"),
+                         "http://10.0.0.1")
 
-    def test_logs_in_via_the_portal_when_fixed_url_is_unreachable(self):
-        portal_url = "https://wifi.ais.co.th/login?nasid=7"
-        ok, posts = self.login(AISProvider(), portal_url, {portal_url: LOGIN_PAGE % "auth"})
-        self.assertTrue(ok)
-        self.assertEqual(posts[0][0], "https://wifi.ais.co.th/auth")
-
-    def test_credentials_never_sent_to_untrusted_host(self):
+    def test_password_login_posts_credentials_to_login_endpoint(self):
+        s = _ApiSession({"login": LOGON_OK})
         prov = AISProvider()
-        ok, posts = self.login(prov, "http://10.0.0.1/login", {"http://10.0.0.1/login": LOGIN_PAGE % ""})
+        ok = prov.login(s, portal.LoginContext(phone="0812345678", password="S3cretPw"),
+                        portal_url="https://wifi.ais.co.th", method="password")
+        self.assertTrue(ok)
+        url, data = s.posts[0]
+        self.assertEqual(url, "https://wifi.ais.co.th/login")
+        self.assertEqual((data["txtUsername"], data["txtPassword"]), ("0812345678", "S3cretPw"))
+
+    def test_wrong_password_reports_portal_message(self):
+        s = _ApiSession({"login": LOGON_BAD})
+        prov = AISProvider()
+        ok = prov.login(s, portal.LoginContext(phone="0812345678", password="nope"),
+                        portal_url="https://wifi.ais.co.th", method="password")
         self.assertFalse(ok)
-        self.assertEqual(posts, [])
-        self.assertIn("10.0.0.1", prov.last_failure)
+        self.assertEqual(prov.last_failure, "Invalid User/Password")
 
-    def test_trusted_portal_hosts_and_forms_posting_to_ais(self):
-        url = "http://10.0.0.1/login"
-        ok, posts = self.login(AISProvider(trusted_hosts=["10.0.0.1"]), url, {url: LOGIN_PAGE % ""})
-        self.assertTrue(ok)
-        self.assertEqual(posts[0][0], url)
-        # A gateway page whose form posts to an AIS domain is fine without configuration.
-        ok, posts = self.login(AISProvider(), url, {url: LOGIN_PAGE % "https://wifi.ais.co.th/auth"})
-        self.assertTrue(ok)
-        self.assertEqual(posts[0][0], "https://wifi.ais.co.th/auth")
+    def test_credentials_only_go_to_ais_even_with_untrusted_portal(self):
+        s = _ApiSession({"login": LOGON_OK})
+        AISProvider().login(s, portal.LoginContext(phone="0812345678", password="pw"),
+                            portal_url="http://evil.example/login", method="password")
+        self.assertTrue(all(u.startswith("https://wifi.ais.co.th/") for u, _ in s.posts))
 
-    def test_meta_refresh_interstitial_is_followed(self):
-        hop = "http://10.0.0.1/"
-        pages = {hop: '<meta http-equiv="refresh" content="0;url=https://wifi.ais.co.th/login">',
-                 "https://wifi.ais.co.th/login": LOGIN_PAGE % "auth"}
-        ok, posts = self.login(AISProvider(), hop, pages)
+    def test_otp_registers_then_logs_in_with_the_code(self):
+        s = _ApiSession({"register": REGISTERED, "login": LOGON_OK})
+        events = []
+        ctx = portal.LoginContext(
+            phone="0812345678",
+            otp_prepare=lambda: events.append("prepare"),
+            otp_provider=lambda: events.append("otp") or "482193",
+        )
+        ok = AISProvider().login(s, ctx, portal_url="https://wifi.ais.co.th", method="otp")
         self.assertTrue(ok)
-        self.assertEqual(posts[0][0], "https://wifi.ais.co.th/auth")
+        # Baseline taken before the SMS request, then the code used as password.
+        self.assertEqual(events, ["prepare", "otp"])
+        paths = [u.rsplit("/", 1)[-1] for u, _ in s.posts]
+        self.assertEqual(paths, ["register", "login"])
+        self.assertEqual(s.posts[1][1]["txtPassword"], "482193")
+
+    def test_otp_without_code_fails_without_logging_in(self):
+        s = _ApiSession({"register": REGISTERED})
+        ctx = portal.LoginContext(phone="0812345678", otp_provider=lambda: None)
+        ok = AISProvider().login(s, ctx, portal_url="https://wifi.ais.co.th", method="otp")
+        self.assertFalse(ok)
+        self.assertEqual([u.rsplit("/", 1)[-1] for u, _ in s.posts], ["register"])
 
 
 class OtpFlowTests(unittest.TestCase):

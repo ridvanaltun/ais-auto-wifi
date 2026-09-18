@@ -54,12 +54,18 @@ ONLINE = "online"     # real internet access
 CAPTIVE = "captive"   # network available but a portal blocks it → login required
 OFFLINE = "offline"   # no network/access at all (e.g. Wi-Fi is off)
 
-# In-page JavaScript redirect: location.href = "..." / location.replace("...")
+# In-page JavaScript redirect: location.href = "..." / location.replace("...").
+# The lookbehind keeps XML/HTML attributes such as
+# `noNamespaceSchemaLocation="…"` from being mistaken for `location=…`.
 _JS_REDIRECT_RE = re.compile(
-    r"""location(?:\.href)?\s*=\s*["']([^"']+)["']"""
-    r"""|location\.(?:replace|assign)\(\s*["']([^"']+)["']""",
+    r"""(?<![\w.])(?:window\.|document\.|self\.|top\.)?location(?:\.href)?\s*=\s*["']([^"']+)["']"""
+    r"""|(?<![\w.])(?:window\.|document\.|self\.|top\.)?location\.(?:replace|assign)\(\s*["']([^"']+)["']""",
     re.IGNORECASE,
 )
+
+# HTML comments — a captive page may carry a WISPr XML block in one, which is
+# data, not a redirect for us to follow.
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 
 
 @dataclass
@@ -103,7 +109,7 @@ def find_redirect_url(html: Optional[str], base_url: str) -> Optional[str]:
     except Exception as exc:  # broken HTML must not break the probe
         logger.debug("Could not parse the portal page: %s", exc)
     if target is None:
-        m = _JS_REDIRECT_RE.search(html)
+        m = _JS_REDIRECT_RE.search(_HTML_COMMENT_RE.sub(" ", html))
         if m:
             target = (m.group(1) or m.group(2) or "").strip()
     if not target:
