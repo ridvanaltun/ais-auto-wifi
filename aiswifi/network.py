@@ -24,10 +24,30 @@ from typing import Dict, Optional
 from urllib.parse import urljoin, urlsplit
 
 import requests
+import urllib3.util.connection as _u3_connection
 from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 
 logger = logging.getLogger("aiswifi.network")
+
+# Captive portals are almost always IPv4-only. On macOS, when the host has an
+# IPv4-mapped IPv6 address (or the network advertises IPv6 with no route), the
+# default AF_UNSPEC resolution makes urllib3 try IPv6 first and fail with
+# "[Errno 51] Network is unreachable". Forcing IPv4 avoids that.
+_ORIG_GAI_FAMILY = _u3_connection.allowed_gai_family
+_FORCE_IPV4 = True
+
+
+def set_ip_family(force_ipv4: bool) -> None:
+    """Choose whether HTTP connections are restricted to IPv4 (default: yes)."""
+    global _FORCE_IPV4
+    _FORCE_IPV4 = force_ipv4
+
+
+def _apply_ip_family() -> None:
+    _u3_connection.allowed_gai_family = (
+        (lambda: socket.AF_INET) if _FORCE_IPV4 else _ORIG_GAI_FAMILY
+    )
 
 # The URL macOS uses for captive portal detection. With real internet access
 # it returns a small HTML page whose body is exactly "Success".
@@ -77,6 +97,7 @@ class ProbeResult:
 
 def new_session() -> requests.Session:
     """A browser-like HTTP session that follows redirects."""
+    _apply_ip_family()
     s = requests.Session()
     s.headers.update({"User-Agent": BROWSER_UA, "Accept": "text/html,*/*"})
     s.trust_env = False  # ignore system proxy settings (can break behind a portal)

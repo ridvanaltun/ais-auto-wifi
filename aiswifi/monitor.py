@@ -139,6 +139,7 @@ class Monitor:
     # ---- Main loop -------------------------------------------------------------
 
     def _run(self) -> None:
+        network.set_ip_family(bool(self.cfg.get("force_ipv4", True)))
         session = network.new_session()
         network.apply_cert_pins(session, self.cfg.get("portal_cert_pins"))
         backoff = 0.0

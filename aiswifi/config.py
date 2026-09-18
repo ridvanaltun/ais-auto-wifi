@@ -55,6 +55,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "ais_status_url": "https://wifi.ais.co.th/checkStatusLogon",
     # Show the remaining session time in the menu bar next to the icon.
     "show_time_in_menubar": True,
+    # Restrict HTTP connections to IPv4. Captive portals are IPv4-only and IPv6
+    # attempts fail with "Network is unreachable"; turn off only to debug.
+    "force_ipv4": True,
     # Show informational notifications?
     "notifications": True,
     # OPTIONAL: certificate pinning for portals that present their own

@@ -93,6 +93,24 @@ class ProbeTests(unittest.TestCase):
         self.assertTrue(fake.closed)
 
 
+class IpFamilyTests(unittest.TestCase):
+    def tearDown(self):
+        network.set_ip_family(True)  # restore the app default
+
+    def test_force_ipv4_restricts_family(self):
+        import socket
+        import urllib3.util.connection as u3c
+        network.set_ip_family(True)
+        network.new_session().close()
+        self.assertEqual(u3c.allowed_gai_family(), socket.AF_INET)
+
+    def test_can_be_disabled(self):
+        network.set_ip_family(False)
+        network.new_session().close()
+        import urllib3.util.connection as u3c
+        self.assertIs(u3c.allowed_gai_family, network._ORIG_GAI_FAMILY)
+
+
 class SsidTests(unittest.TestCase):
     def _ssid_with(self, networksetup_out):
         def fake_run(args, **kw):

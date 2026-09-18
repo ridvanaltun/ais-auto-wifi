@@ -30,6 +30,7 @@ def _diagnose() -> int:
     print("== AIS Wi-Fi Auto-Login — Diagnostics ==\n")
 
     cfg = config_mod.load_config()
+    network.set_ip_family(bool(cfg.get("force_ipv4", True)))
     print(f"Config file  : {config_mod.CONFIG_PATH}")
     print(f"Log file     : {config_mod.LOG_PATH}")
     print(f"Method       : {cfg.get('login_method')}")
