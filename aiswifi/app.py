@@ -32,9 +32,8 @@ from . import providers as providers_mod
 
 logger = logging.getLogger("aiswifi.app")
 
-# System Settings → Privacy & Security → …
+# System Settings → Privacy & Security → Full Disk Access
 FULL_DISK_ACCESS_URL = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
-LOCATION_URL = "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices"
 
 # Menu bar title (short icon) per status. Emoji are used instead of text.
 STATUS_ICON = {
@@ -125,12 +124,11 @@ class AISWifiApp(rumps.App):
 
         # Permissions submenu — shows live state and opens the right Settings
         # pane. The parent gets a ⚠️ when the current settings need a missing one.
+        # (Only Full Disk Access is actionable: the app never requests Location,
+        # so it does not appear in that list, and the SSID is only cosmetic.)
         self.perm_menu = rumps.MenuItem("Permissions")
         self.perm_fda = rumps.MenuItem("Full Disk Access", callback=self._on_open_fda)
-        self.perm_location = rumps.MenuItem("Wi-Fi name (Location) — optional",
-                                            callback=self._on_open_location)
         self.perm_menu.add(self.perm_fda)
-        self.perm_menu.add(self.perm_location)
         self._sync_permissions()
 
         self.log_item = rumps.MenuItem("Open Logs", callback=self._on_open_log)
@@ -363,10 +361,6 @@ class AISWifiApp(rumps.App):
 
     def _on_open_fda(self, _sender) -> None:
         self._explain_full_disk_access()
-
-    def _on_open_location(self, _sender) -> None:
-        _bring_to_front()
-        subprocess.run(["open", LOCATION_URL], check=False)
 
     def _on_set_credentials(self, _sender) -> None:
         # For which provider? The preferred one if set, otherwise AIS.

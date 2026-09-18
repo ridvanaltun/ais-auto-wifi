@@ -154,9 +154,10 @@ require you to turn the permission off and on again after a rebuild.
 The menu's **Permissions** submenu shows whether Full Disk Access is granted
 and marks itself with a ⚠️ when your current settings need it (SMS OTP reading
 from Messages without access); click the item to open the right Settings pane.
-Note: on a captive portal the forwarded SMS cannot reach the Mac anyway (it
-needs internet you do not have yet), so **Ask me in a window** is the reliable
-OTP choice and needs no permission.
+Full Disk Access is the only permission the app needs, and only for that one
+feature. Note: on a captive portal the forwarded SMS cannot reach the Mac
+anyway (it needs internet you do not have yet), so **Ask me in a window** is
+the reliable OTP choice and needs no permission at all.
 
 The **Messages : readable / unreadable** line in the output of
 `python3 run.py --diagnose` shows whether the permission works.
@@ -167,17 +168,14 @@ small dialog. Or skip all of this and use the **Password** method.
 
 ---
 
-## SSID reading and Location permission
+## The Wi-Fi name (SSID) is cosmetic — no Location permission needed
 
-macOS requires **Location Services** permission to read the name (SSID) of the
-Wi-Fi network you're connected to. Without it the app still works; it just
-detects "which network am I on" from the portal URL/HTML. To see the SSID:
-**System Settings → Privacy & Security → Location Services**.
-
-Note: on macOS 14.4 and later, a Python script that is not packaged as an .app
-cannot request Location permission, and `networksetup`/`airport` hide the
-network name too; so the SSID will most likely show as "(unreadable)". This is
-expected and does not affect logging in.
+The app **does not require Location permission** and never asks for it, which
+is why it does not appear in **System Settings → Privacy & Security → Location
+Services**. Reading the network name (SSID) would need Location on modern
+macOS, but the app only uses the SSID to label the menu — detection, login and
+the countdown all work from the portal URL instead. So the SSID often shows as
+"(unreadable)", and that is completely fine and does not affect anything.
 
 ---
 
