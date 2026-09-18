@@ -101,7 +101,15 @@ python3 run.py
      seconds between failed attempts. **Tip:** once AIS has texted you a
      password, you can save it under **Enter Credentials…** and switch to the
      Password method for hands-off reconnects with no more SMS.
-3. As long as **Auto Connect** is on, the app handles disconnects on its own.
+3. If you use **SMS OTP**, choose where the code comes from in the
+   **SMS OTP Code** submenu:
+   - **Read code from Messages** — read it automatically from the Mac's
+     Messages app (needs Text Message Forwarding + Full Disk Access).
+   - **Ask me in a window** — type the code yourself from your phone. Use this
+     if forwarding does not reach the Mac, which is common on a captive portal:
+     the forwarded SMS travels over the internet, but you have none until you
+     are logged in.
+4. As long as **Auto Connect** is on, the app handles disconnects on its own.
    You can also trigger it manually at any time with **Connect Now**.
 
 ---

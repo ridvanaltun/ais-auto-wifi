@@ -109,6 +109,13 @@ class AISWifiApp(rumps.App):
         self.method_otp = rumps.MenuItem("SMS OTP", callback=self._on_method_otp)
         self._sync_method_checks()
 
+        # Where the SMS OTP code comes from (only used with the SMS OTP method).
+        self.otp_src_messages = rumps.MenuItem("Read code from Messages",
+                                               callback=self._on_otp_source_messages)
+        self.otp_src_ask = rumps.MenuItem("Ask me in a window",
+                                          callback=self._on_otp_source_ask)
+        self._sync_otp_source_checks()
+
         self.log_item = rumps.MenuItem("Open Logs", callback=self._on_open_log)
         self.about_item = rumps.MenuItem(f"About (v{__version__})", callback=self._on_about)
         self.quit_item = rumps.MenuItem("Quit", callback=self._on_quit)
@@ -124,6 +131,7 @@ class AISWifiApp(rumps.App):
             None,
             self.creds_item,
             {"Login Method": [self.method_pw, self.method_otp]},
+            {"SMS OTP Code": [self.otp_src_messages, self.otp_src_ask]},
             None,
             self.log_item,
             self.about_item,
@@ -298,6 +306,24 @@ class AISWifiApp(rumps.App):
         is_pw = self.cfg.get("login_method", "password") == "password"
         self.method_pw.state = 1 if is_pw else 0
         self.method_otp.state = 0 if is_pw else 1
+
+    def _on_otp_source_messages(self, _sender) -> None:
+        self.cfg["otp_source"] = "messages"
+        config_mod.save_config(self.cfg)
+        self._sync_otp_source_checks()
+        # Only meaningful with the SMS OTP method; warn if Messages is unreadable.
+        if self.cfg.get("login_method") == "otp" and not otp.can_read_messages():
+            self._explain_full_disk_access()
+
+    def _on_otp_source_ask(self, _sender) -> None:
+        self.cfg["otp_source"] = "ask"
+        config_mod.save_config(self.cfg)
+        self._sync_otp_source_checks()
+
+    def _sync_otp_source_checks(self) -> None:
+        source = self.cfg.get("otp_source", "messages")
+        self.otp_src_messages.state = 1 if source == "messages" else 0
+        self.otp_src_ask.state = 1 if source == "ask" else 0
 
     def _on_set_credentials(self, _sender) -> None:
         # For which provider? The preferred one if set, otherwise AIS.

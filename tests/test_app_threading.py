@@ -131,6 +131,40 @@ class OpenAtLoginMenuTests(unittest.TestCase):
 
 
 @unittest.skipIf(app_mod is None, "requires macOS + rumps")
+class OtpSourceMenuTests(unittest.TestCase):
+    def _app(self, source="messages"):
+        app = mock.Mock()
+        app.cfg = {"login_method": "otp", "otp_source": source}
+        app.otp_src_messages = mock.Mock()
+        app.otp_src_ask = mock.Mock()
+        return app
+
+    def test_ask_option_sets_config_and_checks(self):
+        app = self._app()
+        with mock.patch.object(app_mod.config_mod, "save_config") as save:
+            app_mod.AISWifiApp._on_otp_source_ask(app, None)
+        self.assertEqual(app.cfg["otp_source"], "ask")
+        save.assert_called_once()
+        app_mod.AISWifiApp._sync_otp_source_checks(app)
+        self.assertEqual((app.otp_src_ask.state, app.otp_src_messages.state), (1, 0))
+
+    def test_messages_option_warns_when_unreadable(self):
+        app = self._app(source="ask")
+        with mock.patch.object(app_mod.config_mod, "save_config"), \
+                mock.patch.object(app_mod.otp, "can_read_messages", return_value=False):
+            app_mod.AISWifiApp._on_otp_source_messages(app, None)
+        self.assertEqual(app.cfg["otp_source"], "messages")
+        app._explain_full_disk_access.assert_called_once()
+
+    def test_messages_option_no_warning_when_readable(self):
+        app = self._app(source="ask")
+        with mock.patch.object(app_mod.config_mod, "save_config"), \
+                mock.patch.object(app_mod.otp, "can_read_messages", return_value=True):
+            app_mod.AISWifiApp._on_otp_source_messages(app, None)
+        app._explain_full_disk_access.assert_not_called()
+
+
+@unittest.skipIf(app_mod is None, "requires macOS + rumps")
 class ActivationPolicyTests(unittest.TestCase):
     def test_run_makes_app_focusable_before_start(self):
         # With a non-framework Python the default "Prohibited" policy prevents
