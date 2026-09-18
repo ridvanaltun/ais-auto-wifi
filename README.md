@@ -21,6 +21,20 @@ The menu bar icon shows the current state at a glance.
 
 ---
 
+## Screenshots
+
+<p>
+  <img src="docs/screenshots/menu.png" alt="Menu bar dropdown showing status, the session countdown and the actions" width="340">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/otp-dialog.png" alt="SMS OTP dialog: enter the code from your phone" width="360">
+</p>
+
+The menu bar dropdown (with the live session countdown) and the SMS OTP prompt
+in **Ask me in a window** mode. *Rendered previews of the actual UI — replace
+`docs/screenshots/*.png` with your own captures if you like.*
+
+---
+
 ## What do the icons mean?
 
 | Icon | Status |
