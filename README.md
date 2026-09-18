@@ -177,6 +177,22 @@ number/password/OTP fields.
 
 ---
 
+## Remaining session time (the countdown)
+
+The AIS portal ends your connection when its countdown runs out. The app reads
+that same countdown from the portal and shows it while you are online:
+
+- next to the 🛜 icon in the menu bar (e.g. **🛜 9:59**), and
+- as **Time left** in the menu.
+
+`python3 run.py --diagnose`, run on the AIS network, prints a **Time left**
+line too. When the countdown reaches zero and the connection drops, the app
+logs you back in as usual, so a fresh countdown starts. To hide it from the
+menu bar, set `"show_time_in_menubar": false` in
+`~/.config/aiswifi/config.json`. (Unlimited packages show **Unlimited**.)
+
+---
+
 ## Where your credentials are sent
 
 The app first opens the login page the Wi-Fi network actually redirects to

@@ -95,6 +95,24 @@ class DiagnoseWithoutMacTests(_TempConfigDir):
         self.assertIn("Messages     : unreadable", text)
         self.assertIn("Diagnostics complete.", text)
 
+    def test_diagnose_shows_time_left_when_on_ais(self):
+        import run
+        from aiswifi import network
+        from aiswifi.providers.ais import AISProvider
+
+        info = {"online": True, "remaining_text": "00:10:42", "remaining_seconds": 642,
+                "session_text": "00:19:18"}
+        out = io.StringIO()
+        with mock.patch.object(network, "get_ssid", return_value="AIS SUPER WiFi"), \
+                mock.patch.object(network, "probe_connectivity",
+                                  return_value=network.ProbeResult(network.ONLINE)), \
+                mock.patch.object(AISProvider, "session_status", return_value=info), \
+                mock.patch.object(config_mod, "get_credentials", return_value=(None, None)), \
+                mock.patch.object(otp, "can_read_messages", return_value=False), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(run.main(["--diagnose"]), 0)
+        self.assertIn("Time left    : 00:10:42 (session 00:19:18)", out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

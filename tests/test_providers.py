@@ -7,8 +7,61 @@ import requests
 
 from aiswifi import network, portal
 from aiswifi import providers as providers_mod
-from aiswifi.providers.ais import DEFAULT_AIS_LOGIN_URL, AISProvider
+from aiswifi.providers.ais import (
+    DEFAULT_AIS_LOGIN_URL, AISProvider, _hms_to_seconds, parse_status,
+)
 from aiswifi.providers.generic import GenericProvider
+
+
+class SessionStatusTests(unittest.TestCase):
+    # The real endpoint returns a JSON string whose values are one-element lists.
+    RAW = ('{"logonStatus":["true"],"remainingTime":["00:10:42"],'
+           '"sessionTime":["00:19:18"],"unlimitedAccount":["false"],"responseCode":["0000"]}')
+
+    def test_hms_to_seconds(self):
+        self.assertEqual(_hms_to_seconds("00:10:42"), 642)
+        self.assertEqual(_hms_to_seconds("1:05:09"), 3909)
+        self.assertIsNone(_hms_to_seconds("nope"))
+        self.assertIsNone(_hms_to_seconds(None))
+
+    def test_parse_nested_json_string_and_lists(self):
+        info = parse_status(self.RAW)
+        self.assertEqual((info["online"], info["remaining_seconds"], info["remaining_text"]),
+                         (True, 642, "00:10:42"))
+        self.assertEqual(info["session_text"], "00:19:18")
+
+    def test_parse_unlimited_and_logged_out(self):
+        unlimited = parse_status({"logonStatus": ["true"], "unlimitedAccount": ["true"],
+                                  "remainingTime": ["00:00:00"]})
+        self.assertTrue(unlimited["unlimited"])
+        self.assertIsNone(unlimited["remaining_seconds"])
+        self.assertEqual(unlimited["remaining_text"], "Unlimited")
+        self.assertFalse(parse_status({"logonStatus": ["false"]})["online"])
+
+    def test_session_status_posts_to_status_url(self):
+        class S:
+            def post(self, url, **kw):
+                self.url, self.kw = url, kw
+                return type("R", (), {"status_code": 200, "json": lambda self=None: SessionStatusTests.RAW})()
+        prov, sess = AISProvider(), S()
+        info = prov.session_status(sess)
+        self.assertEqual(sess.url, "https://wifi.ais.co.th/checkStatusLogon")
+        self.assertEqual(info["remaining_seconds"], 642)
+
+    def test_session_status_handles_errors(self):
+        class Boom:
+            def post(self, url, **kw):
+                raise requests.ConnectionError("not on AIS")
+        self.assertIsNone(AISProvider().session_status(Boom()))
+
+        class NotOk:
+            def post(self, url, **kw):
+                return type("R", (), {"status_code": 404, "text": ""})()
+        self.assertIsNone(AISProvider().session_status(NotOk()))
+
+    def test_generic_provider_has_no_status(self):
+        self.assertFalse(GenericProvider().supports_status)
+        self.assertIsNone(GenericProvider().session_status(object()))
 
 
 class AISProviderTests(unittest.TestCase):

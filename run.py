@@ -58,12 +58,23 @@ def _diagnose() -> int:
             print(f"Portal page  : could not be saved ({exc})")
 
     registry = providers_mod.build_registry(cfg.get("ais_login_url"),
-                                            cfg.get("trusted_portal_hosts"))
+                                            cfg.get("trusted_portal_hosts"),
+                                            cfg.get("ais_status_url"))
     provider = providers_mod.detect_provider(
         registry, ssid, result.portal_url, result.body,
         preferred_key=cfg.get("preferred_provider"),
     )
     print(f"Provider     : {provider.name if provider else '(none found)'}")
+
+    if provider is not None and getattr(provider, "supports_status", False):
+        info = provider.session_status(network.new_session())
+        if info and info.get("online"):
+            extra = f" (session {info['session_text']})" if info.get("session_text") else ""
+            print(f"Time left    : {info.get('remaining_text') or '—'}{extra}")
+        elif info is not None:
+            print("Time left    : not logged in on this network")
+        else:
+            print("Time left    : unavailable (not on the AIS network?)")
 
     if provider:
         try:

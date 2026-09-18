@@ -101,6 +101,46 @@ class OtpSourceTests(unittest.TestCase):
         self.assertEqual(fn(), "1234")
 
 
+class _StatusProvider:
+    key, name, supports_status, last_failure = "ais", "AIS SUPER WiFi", True, ""
+    def __init__(self, info):
+        self.info = info
+    def matches(self, ssid, *a):
+        return bool(ssid and "ais" in ssid.lower())
+    def session_status(self, session, timeout):
+        return self.info
+
+
+class RemainingTimeTests(unittest.TestCase):
+    def test_online_updates_remaining_from_status_provider(self):
+        m = _monitor()
+        m._status_provider = _StatusProvider({"online": True, "remaining_seconds": 642,
+                                              "remaining_text": "00:10:42"})
+        m._update_remaining(object(), ssid=None)
+        snap = m.state.snapshot()
+        self.assertEqual((snap["remaining_seconds"], snap["remaining_text"]), (642, "00:10:42"))
+
+    def test_identifies_provider_by_ssid_when_not_logged_in_yet(self):
+        m = _monitor()
+        m._registry = [_StatusProvider({"online": True, "remaining_seconds": 60,
+                                        "remaining_text": "00:01:00"})]
+        m._update_remaining(object(), ssid="AIS SUPER WiFi")
+        self.assertEqual(m.state.snapshot()["remaining_text"], "00:01:00")
+
+    def test_non_ais_network_shows_no_countdown(self):
+        m = _monitor()
+        m._registry = [_StatusProvider({"online": True, "remaining_text": "00:05:00"})]
+        m._update_remaining(object(), ssid="HomeWiFi")  # provider does not match
+        self.assertEqual(m.state.snapshot()["remaining_text"], "")
+
+    def test_logged_out_status_clears_remaining(self):
+        m = _monitor()
+        m._status_provider = _StatusProvider({"online": False})
+        m.state.update(remaining_text="00:09:00", remaining_seconds=540)
+        m._update_remaining(object(), ssid=None)
+        self.assertEqual(m.state.snapshot()["remaining_seconds"], None)
+
+
 class LoopTests(unittest.TestCase):
     def test_initial_and_set_auto_do_not_claim_online(self):
         m = _monitor(auto_login=True)

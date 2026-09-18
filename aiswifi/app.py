@@ -56,6 +56,17 @@ STATUS_TEXT = {
 }
 
 
+def _compact_time(seconds: Optional[int]) -> str:
+    """Seconds → a short clock like "9:59" or "1:05:22" (no leading zero hour/min)."""
+    if seconds is None or seconds < 0:
+        return ""
+    h, rem = divmod(int(seconds), 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
 def _bring_to_front() -> None:
     """
     Bring the app to the front before opening a dialog. A menu bar app runs
@@ -81,6 +92,7 @@ class AISWifiApp(rumps.App):
         # --- Menu ---------------------------------------------------------------
         self.status_item = rumps.MenuItem("Status: —")
         self.detail_item = rumps.MenuItem("")
+        self.time_item = rumps.MenuItem("Time left: —")
 
         self.login_now_item = rumps.MenuItem("Connect Now", callback=self._on_login_now)
         self.auto_item = rumps.MenuItem("Auto Connect", callback=self._on_toggle_auto)
@@ -104,6 +116,7 @@ class AISWifiApp(rumps.App):
         self.menu = [
             self.status_item,
             self.detail_item,
+            self.time_item,
             None,  # separator
             self.login_now_item,
             self.auto_item,
@@ -134,7 +147,20 @@ class AISWifiApp(rumps.App):
     def _refresh_ui(self, _timer) -> None:
         snap = self.monitor.state.snapshot()
         status = snap["status"]
-        self.title = STATUS_ICON.get(status, "🛜")
+        icon = STATUS_ICON.get(status, "🛜")
+
+        # Remaining session time (the portal countdown), when online.
+        remaining_text = snap.get("remaining_text") or ""
+        remaining_seconds = snap.get("remaining_seconds")
+        compact = _compact_time(remaining_seconds)
+        if status == ST_ONLINE and remaining_text and self.cfg.get("show_time_in_menubar", True):
+            self.title = f"{icon} {compact or remaining_text}"
+        else:
+            self.title = icon
+        if status == ST_ONLINE and remaining_text:
+            self.time_item.title = f"Time left: {remaining_text}"
+        else:
+            self.time_item.title = "Time left: —"
 
         st_text = STATUS_TEXT.get(status, status)
         ssid = snap.get("ssid") or "—"
@@ -276,7 +302,8 @@ class AISWifiApp(rumps.App):
     def _on_set_credentials(self, _sender) -> None:
         # For which provider? The preferred one if set, otherwise AIS.
         registry = providers_mod.build_registry(self.cfg.get("ais_login_url"),
-                                                self.cfg.get("trusted_portal_hosts"))
+                                                self.cfg.get("trusted_portal_hosts"),
+                                                self.cfg.get("ais_status_url"))
         pref = self.cfg.get("preferred_provider") or "ais"
         provider = providers_mod.get_provider_by_key(registry, pref) or registry[0]
         saved_phone, saved_password = config_mod.get_credentials(provider.key)

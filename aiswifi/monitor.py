@@ -50,6 +50,9 @@ class State:
     message: str = ""
     last_login_ts: float = 0.0
     last_error: str = ""
+    # Remaining session time (portal countdown), when known.
+    remaining_seconds: Optional[int] = None
+    remaining_text: str = ""
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def update(self, **kwargs: Any) -> None:
@@ -66,6 +69,8 @@ class State:
                 "message": self.message,
                 "last_login_ts": self.last_login_ts,
                 "last_error": self.last_error,
+                "remaining_seconds": self.remaining_seconds,
+                "remaining_text": self.remaining_text,
             }
 
 
@@ -87,7 +92,10 @@ class Monitor:
         self._ask_otp_cb: Optional[Callable[[], Optional[str]]] = None
         self._was_auto = bool(cfg.get("auto_login"))
         self._registry = providers_mod.build_registry(cfg.get("ais_login_url"),
-                                                      cfg.get("trusted_portal_hosts"))
+                                                      cfg.get("trusted_portal_hosts"),
+                                                      cfg.get("ais_status_url"))
+        # Provider used to report the remaining session time while online.
+        self._status_provider: Optional[Any] = None
 
         self.state.status = ST_CHECKING if cfg.get("auto_login") else ST_IDLE
 
@@ -170,13 +178,16 @@ class Monitor:
             backoff = 0.0
             self._set_state(status=ST_ONLINE, ssid=ssid,
                             message="Connected", last_error="")
+            self._update_remaining(session, ssid)
         elif result.state == network.OFFLINE:
             backoff = 0.0
             self._set_state(status=ST_OFFLINE, ssid=ssid,
-                            message="No network (Wi-Fi may be off)")
+                            message="No network (Wi-Fi may be off)",
+                            remaining_seconds=None, remaining_text="")
         else:  # CAPTIVE
             self._set_state(status=ST_CAPTIVE, ssid=ssid,
-                            message="Connection lost, logging in…")
+                            message="Connection lost, logging in…",
+                            remaining_seconds=None, remaining_text="")
             logger.info("Captive portal detected: %s",
                         portal.redact(result.portal_url or "(no portal URL)"))
             ok = self._do_login(session, result, ssid)
@@ -288,9 +299,12 @@ class Monitor:
                              portal.redact(traceback.format_exc(), phone, password))
                 ok = False
             if ok:
+                if getattr(provider, "supports_status", False):
+                    self._status_provider = provider
                 self._set_state(status=ST_ONLINE, provider=provider.name,
                                 message="Login successful 🎉",
                                 last_login_ts=time.time(), last_error="")
+                self._update_remaining(session, ssid)
                 return True
             if attempt < retries:
                 self._stop.wait(2)
@@ -300,6 +314,39 @@ class Monitor:
                         message=f"{reason} (will retry)",
                         last_error="login_failed")
         return False
+
+    def _status_capable_provider(self, ssid: Optional[str]):
+        """
+        The provider whose remaining time we can query while online: the one we
+        logged in through, else the one matching the current network (so the
+        countdown also shows when the app starts already connected).
+        """
+        if self._status_provider is not None:
+            return self._status_provider
+        provider = providers_mod.detect_provider(
+            self._registry, ssid, None, None,
+            preferred_key=self.cfg.get("preferred_provider"))
+        if provider is not None and getattr(provider, "supports_status", False):
+            return provider
+        return None
+
+    def _update_remaining(self, session, ssid: Optional[str]) -> None:
+        """While online, refresh the remaining session time (portal countdown)."""
+        provider = self._status_capable_provider(ssid)
+        if provider is None:
+            self._set_state(remaining_seconds=None, remaining_text="")
+            return
+        try:
+            info = provider.session_status(session, float(self.cfg.get("http_timeout", 12)))
+        except Exception as exc:
+            logger.debug("Could not read the session status: %s", exc)
+            info = None
+        if not info or not info.get("online"):
+            # Reachable but not an AIS session (e.g. home Wi-Fi): no countdown.
+            self._set_state(remaining_seconds=None, remaining_text="")
+            return
+        self._set_state(remaining_seconds=info.get("remaining_seconds"),
+                        remaining_text=info.get("remaining_text") or "")
 
     def _make_otp_provider(self) -> Tuple[Optional[Callable[[], None]],
                                           Callable[[], Optional[str]]]:

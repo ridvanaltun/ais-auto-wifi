@@ -36,6 +36,9 @@ class BaseProvider:
     # (Provider objects are only used on the monitor thread.)
     last_failure: str = ""
 
+    # Whether session_status() can report the remaining session time.
+    supports_status: bool = False
+
     # ---- Detection ---------------------------------------------------------------
 
     def matches(self, ssid: Optional[str], portal_url: Optional[str],
@@ -229,6 +232,17 @@ class BaseProvider:
             return False
         logger.info("[%s] OTP login form submitted.", self.key)
         return True
+
+    def session_status(self, session, http_timeout: float = 8.0) -> Optional[dict]:
+        """
+        While online, report the current session, or None if unknown.
+
+        Returns a dict with at least:
+          - "remaining_seconds": Optional[int]  (None means unlimited/unknown)
+          - "remaining_text":    str            (e.g. "00:10:42" or "Unlimited")
+        The base provider does not know how; portals that expose it override this.
+        """
+        return None
 
     def _verify_online(self, session, timeout: float, attempts: int = 3) -> bool:
         """Verify that the internet is really reachable after the login."""

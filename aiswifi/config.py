@@ -51,6 +51,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "otp_wait_timeout": 90,
     # AIS portal login URL (can be changed if needed).
     "ais_login_url": "https://ext-activities.ais.co.th/apps/wifigen/login.aspx",
+    # AIS endpoint that reports the logged-in session and its remaining time.
+    "ais_status_url": "https://wifi.ais.co.th/checkStatusLogon",
+    # Show the remaining session time in the menu bar next to the icon.
+    "show_time_in_menubar": True,
     # Show informational notifications?
     "notifications": True,
     # OPTIONAL: certificate pinning for portals that present their own

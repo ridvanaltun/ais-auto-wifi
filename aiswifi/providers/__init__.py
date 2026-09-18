@@ -17,13 +17,15 @@ from .generic import GenericProvider
 
 
 def build_registry(ais_login_url: Optional[str] = None,
-                   trusted_hosts: Optional[Iterable[str]] = None) -> List[BaseProvider]:
+                   trusted_hosts: Optional[Iterable[str]] = None,
+                   ais_status_url: Optional[str] = None) -> List[BaseProvider]:
     """
     Build the provider list in detection order.
     IMPORTANT: GenericProvider must always be LAST (it matches everything).
     """
     return [
-        AISProvider(login_url=ais_login_url, trusted_hosts=trusted_hosts),
+        AISProvider(login_url=ais_login_url, trusted_hosts=trusted_hosts,
+                    status_url=ais_status_url),
         # New providers can be added here, e.g.:
         # TrueMoveProvider(),
         GenericProvider(),
