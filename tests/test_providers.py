@@ -109,7 +109,7 @@ class _FlowSession:
 
 LOGON_OK = '{"logonStatus":["true"],"replyMessage":["\\"SBR-0000\\";\\"OK\\""],"responseCode":["0000"]}'
 LOGON_BAD = '{"logonStatus":["false"],"replyMessage":["\\"SBR-0408\\";\\"Invalid User/Password\\""],"responseCode":["0000"]}'
-REGISTERED = '{"responseCode":["0000"],"responseMessage":["REGISTERED_SUCCESS"],"username":["0812345678"]}'
+REGISTERED = '{"responseCode":["0000"],"responseMessage":["REGISTERED_SUCCESS"],"username":["0812345678@aisads"]}'
 
 
 class _ApiSession:
@@ -188,6 +188,8 @@ class AisJsonLoginTests(unittest.TestCase):
         paths = [u.rsplit("/", 1)[-1] for u, _ in s.posts]
         self.assertEqual(paths, ["register", "login"])
         self.assertEqual(s.posts[1][1]["txtPassword"], "482193")
+        # The login uses the username returned by register, not the raw phone.
+        self.assertEqual(s.posts[1][1]["txtUsername"], "0812345678@aisads")
 
     def test_otp_without_code_fails_without_logging_in(self):
         s = _ApiSession({"register": REGISTERED})

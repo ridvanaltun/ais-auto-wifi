@@ -132,8 +132,10 @@ def parse_logon(payload) -> Optional[dict]:
     reply = str(_first(data.get("replyMessage")) or "")
     resp_msg = str(_first(data.get("responseMessage")) or "")
     logon = str(_first(data.get("logonStatus")) or "").strip().lower() == "true"
+    username = _first(data.get("username")) or _first(data.get("userName"))
     ok = _SUCCESS_MARKER in reply or logon or resp_msg == "REGISTERED_SUCCESS"
     return {"ok": ok, "logon": logon, "code": code, "reply": reply,
+            "username": str(username) if username else None,
             "message": _human_reply(reply) or resp_msg}
 
 # "AIS" must start a word in the SSID (".@ AIS SUPER WiFi", "AIS_WiFi");
@@ -250,12 +252,18 @@ class AISProvider(BaseProvider):
         # Take the SMS baseline BEFORE requesting the code.
         if ctx.otp_prepare is not None:
             ctx.otp_prepare()
+        # Register the number to trigger the SMS. The portal creates/looks up
+        # the account and returns the username to log in with (which may differ
+        # from the raw phone, e.g. "<phone>@aisads"); reuse it for the login.
+        username = ctx.phone
         try:
             resp = self._post_api(session, base, _REGISTER_PATH, {
                 "txtMobile": ctx.phone, "ddlOperator": "AIS", "ddlAge": "25-34",
                 "txtLanguage": "EN", "chkAgree": "1",
             }, timeout)
             info = parse_logon(resp.text)
+            if info and info.get("username"):
+                username = info["username"]
             if info and not info["ok"]:
                 # Not fatal: the account may already exist, but the SMS may
                 # still have been sent. Log and keep waiting for the code.
@@ -271,7 +279,7 @@ class AISProvider(BaseProvider):
             self.last_failure = "Could not get the OTP code"
             return False
         # The SMS code is the account's password.
-        return self._submit_logon(session, base, ctx.phone, code, timeout)
+        return self._submit_logon(session, base, username, code, timeout)
 
     def session_status(self, session, http_timeout: float = 8.0) -> Optional[dict]:
         """Query checkStatusLogon for the current session and remaining time."""
