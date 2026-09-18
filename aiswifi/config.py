@@ -33,11 +33,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "auto_login": True,
     # How often (in seconds) the connection is checked.
     "poll_interval": 15,
-    # Preferred login method: "password" (recommended) or "otp"
+    # Preferred login method: "password" (recommended) or "otp". With "otp" the
+    # app asks you for the code in a dialog (the SMS cannot be read from
+    # Messages on a captive portal — there is no internet to receive it yet).
     "login_method": "password",
-    # OTP source: "messages" (read automatically from the Messages app),
-    #             "ask" (ask me in a dialog) or "none"
-    "otp_source": "messages",
     # Preferred provider key; None means automatic detection.
     "preferred_provider": None,
     # How many times a failed login attempt is retried.
@@ -47,8 +46,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "backoff_max": 120,
     # Timeout for HTTP requests (seconds).
     "http_timeout": 12,
-    # Maximum time (seconds) to wait for the OTP SMS.
-    "otp_wait_timeout": 90,
     # AIS portal login URL (can be changed if needed).
     "ais_login_url": "https://ext-activities.ais.co.th/apps/wifigen/login.aspx",
     # AIS endpoint that reports the logged-in session and its remaining time.
@@ -77,7 +74,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 # Settings that only accept specific values.
 _CHOICES: Dict[str, Tuple[str, ...]] = {
     "login_method": ("password", "otp"),
-    "otp_source": ("messages", "ask", "none"),
     "language": ("en", "th"),
 }
 

@@ -30,7 +30,7 @@ The menu bar icon shows the current state at a glance.
 </p>
 
 The menu bar dropdown (with the live session countdown) and the SMS OTP prompt
-in **Ask me in a window** mode.
+where you type the code from your phone.
 
 ---
 
@@ -70,8 +70,8 @@ python3 run.py --diagnose
 ```
 
 This command shows the SSID, the Wi-Fi interface, the connection state, the
-detected provider, whether credentials are saved, and the SMS OTP from the
-last 5 minutes. If something is wrong, this is where you'll see it.
+detected provider, the remaining session time, and whether your credentials
+are saved. If something is wrong, this is where you'll see it.
 
 ### 4. Install it as a Mac app (recommended)
 
@@ -106,67 +106,24 @@ python3 run.py
      portal with number + password. No waiting for an SMS. *This is the most
      trouble-free method.* (You can set a Wi-Fi password from the AIS
      app/portal.)
-   - **SMS OTP:** the app sends your number to AIS, which texts you a code (this
-     code is your account password), and the app reads it from Messages and logs
-     in automatically (the permissions below are required). If Messages cannot be
-     read, or the code does not arrive in time, it asks you in a small dialog.
-     Since every attempt means a new SMS, the OTP method waits at least 60
-     seconds between failed attempts. **Tip:** once AIS has texted you a
-     password, you can save it under **Enter Credentials…** and switch to the
-     Password method for hands-off reconnects with no more SMS.
+   - **SMS OTP:** the app sends your number to AIS, which texts a code to your
+     phone, and the app asks you for that code in a small dialog — you read it
+     from your phone and type it in. Since every attempt means a new SMS, the
+     OTP method waits at least 60 seconds between failed attempts. **Tip:** the
+     SMS code is your account password, so once you have it you can save it
+     under **Enter Credentials…** and switch to the Password method for
+     hands-off reconnects with no more SMS.
    The interface is available in **English** (default) and **Thai** — switch it
    any time from the **Language** submenu (English / ไทย). Your choice is saved.
-3. If you use **SMS OTP**, choose where the code comes from in the
-   **SMS OTP Code** submenu:
-   - **Read code from Messages** — read it automatically from the Mac's
-     Messages app (needs Text Message Forwarding + Full Disk Access).
-   - **Ask me in a window** — type the code yourself from your phone. Use this
-     if forwarding does not reach the Mac, which is common on a captive portal:
-     the forwarded SMS travels over the internet, but you have none until you
-     are logged in.
-4. As long as **Auto Connect** is on, the app handles disconnects on its own.
+3. As long as **Auto Connect** is on, the app handles disconnects on its own.
    You can also trigger it manually at any time with **Connect Now**.
 
----
-
-## Reading the SMS OTP automatically (optional but recommended)
-
-Only needed if you use the **SMS OTP** method. The app reads the incoming code
-from the database of the **Messages** app on your Mac. For that:
-
-### A) iPhone → Mac SMS forwarding
-On the iPhone: **Settings → Messages → Text Message Forwarding** → turn on your
-Mac. This way the SMS code from AIS also lands in Messages on your Mac.
-
-### B) Full Disk Access
-To read the Messages database, the app needs Full Disk Access:
-**System Settings → Privacy & Security → Full Disk Access** → **+** → add
-**AIS Wi-Fi Auto-Login** from Applications and check it. Then quit and reopen
-the app. (If you run `python3 run.py` from a terminal instead, the permission
-belongs to that terminal app — Terminal, iTerm, your editor… — so add that one.)
-
-macOS **never shows a permission prompt** for Full Disk Access — apps are not
-allowed to ask for it, access is silently denied until you grant it manually.
-When you switch to **SMS OTP** without this permission, the app shows a dialog
-with an **Open Settings** button that takes you to the right pane.
-
-Rebuilding the app with `make_app.py` gives it a new signature, so macOS may
-require you to turn the permission off and on again after a rebuild.
-
-The menu's **Permissions** submenu shows whether Full Disk Access is granted
-and marks itself with a ⚠️ when your current settings need it (SMS OTP reading
-from Messages without access); click the item to open the right Settings pane.
-Full Disk Access is the only permission the app needs, and only for that one
-feature. Note: on a captive portal the forwarded SMS cannot reach the Mac
-anyway (it needs internet you do not have yet), so **Ask me in a window** is
-the reliable OTP choice and needs no permission at all.
-
-The **Messages : readable / unreadable** line in the output of
-`python3 run.py --diagnose` shows whether the permission works.
-
-If you'd rather not grant these permissions, that's fine: with the OTP method
-selected, if the app cannot read the code it asks you for it **manually** in a
-small dialog. Or skip all of this and use the **Password** method.
+> **Why the app doesn't read the OTP from Messages:** it can't. On a captive
+> portal the Mac has no internet, so the SMS forwarded from your iPhone (over
+> Apple's push servers) doesn't arrive in Messages until you are already logged
+> in — exactly when the code is no longer needed. So the app always asks you to
+> type the code, which needs no extra permission. For a fully hands-off setup,
+> use the **Password** method.
 
 ---
 
@@ -297,11 +254,11 @@ python3 -m unittest discover -s tests -v
 
 - **"requires 'rumps'" error:** `pip3 install rumps` (or `pip3 install -r
   requirements.txt`).
-- **The SSID is always empty:** Location permission may be off; that's fine,
-  logging in still works.
-- **The OTP is not read automatically:** Are Text Message Forwarding and Full
-  Disk Access on? If not, the app will ask you for the code. Or switch to the
-  Password method.
+- **The SSID is always empty:** that's fine and expected — the app does not use
+  it (see above); logging in still works.
+- **Tired of typing the SMS code:** the code AIS texts you is your account
+  password. Save it under **Enter Credentials…** and switch to the **Password**
+  method for fully automatic reconnects.
 - **Login failed / error icon:** check the output of `python3 run.py --diagnose`
   and the log file via **Open Logs**.
 

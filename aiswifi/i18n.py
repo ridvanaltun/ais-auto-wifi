@@ -31,9 +31,6 @@ STRINGS = {
     "menu.login_method": {"en": "Login Method", "th": "วิธีเข้าสู่ระบบ"},
     "menu.method_password": {"en": "Password (recommended)", "th": "รหัสผ่าน (แนะนำ)"},
     "menu.method_otp": {"en": "SMS OTP", "th": "OTP ทาง SMS"},
-    "menu.otp_source": {"en": "SMS OTP Code", "th": "รหัส OTP ทาง SMS"},
-    "menu.otp_messages": {"en": "Read code from Messages", "th": "อ่านรหัสจากแอป Messages"},
-    "menu.otp_ask": {"en": "Ask me in a window", "th": "ถามฉันในหน้าต่าง"},
     "menu.language": {"en": "Language", "th": "ภาษา"},
     "menu.open_logs": {"en": "Open Logs", "th": "เปิดบันทึก"},
     "menu.about": {"en": "About (v{version})", "th": "เกี่ยวกับ (v{version})"},
@@ -54,13 +51,6 @@ STRINGS = {
     "status.logging_in": {"en": "Logging in…", "th": "กำลังเข้าสู่ระบบ…"},
     "status.error": {"en": "Error", "th": "ข้อผิดพลาด"},
     "status.idle": {"en": "Auto login off", "th": "ปิดการเข้าสู่ระบบอัตโนมัติ"},
-
-    # --- Permissions submenu -------------------------------------------------
-    "perm.menu": {"en": "Permissions", "th": "การอนุญาต"},
-    "perm.fda_granted": {"en": "Full Disk Access: granted",
-                         "th": "Full Disk Access: อนุญาตแล้ว"},
-    "perm.fda_denied": {"en": "Full Disk Access: not granted — for SMS OTP auto-read",
-                        "th": "Full Disk Access: ยังไม่อนุญาต — สำหรับอ่าน OTP อัตโนมัติ"},
 
     # --- Monitor status messages (the detail line) ---------------------------
     "msg.checking": {"en": "Checking…", "th": "กำลังตรวจสอบ…"},
@@ -91,7 +81,6 @@ STRINGS = {
                                "th": "{reason} (จะลองใหม่)"},
     "msg.waiting_otp_dialog": {"en": "Waiting for the OTP code (enter it in the dialog)…",
                                "th": "กำลังรอรหัส OTP (กรอกในหน้าต่าง)…"},
-    "msg.waiting_sms": {"en": "Waiting for the SMS OTP…", "th": "กำลังรอรหัส OTP ทาง SMS…"},
     "msg.login_request_sent": {"en": "Login request sent…", "th": "ส่งคำขอเข้าสู่ระบบแล้ว…"},
 
     # --- Buttons -------------------------------------------------------------
@@ -126,28 +115,6 @@ STRINGS = {
     "dlg.otp.title": {"en": "SMS OTP", "th": "OTP ทาง SMS"},
     "dlg.otp.msg": {"en": "Enter the verification code sent to your phone:",
                     "th": "กรอกรหัสยืนยันที่ส่งไปยังโทรศัพท์ของคุณ:"},
-
-    # --- Full Disk Access dialog ---------------------------------------------
-    "dlg.fda.title": {"en": "Full Disk Access needed", "th": "ต้องการสิทธิ์ Full Disk Access"},
-    "dlg.fda.who_app": {
-        "en": "add “{app}” (from the Applications folder), then quit and reopen this app.",
-        "th": "เพิ่ม “{app}” (จากโฟลเดอร์ Applications) แล้วปิดและเปิดแอปนี้ใหม่"},
-    "dlg.fda.who_terminal": {
-        "en": ("add the app you started this from (e.g. Terminal), then quit and restart it. "
-               "Tip: install it as a Mac app with make_app.py so the permission belongs to "
-               "“{app}” itself."),
-        "th": ("เพิ่มแอปที่คุณใช้เปิดสิ่งนี้ (เช่น Terminal) แล้วปิดและเปิดใหม่ "
-               "เคล็ดลับ: ติดตั้งเป็นแอป Mac ด้วย make_app.py เพื่อให้สิทธิ์เป็นของ “{app}” เอง")},
-    "dlg.fda.msg": {
-        "en": ("To read the SMS code automatically, the app needs Full Disk Access to the "
-               "Messages database. macOS does not let apps ask for this permission, so it "
-               "has to be granted manually:\n\n"
-               "System Settings → Privacy & Security → Full Disk Access → {who}\n\n"
-               "Until then, the app will ask you for the code in a dialog."),
-        "th": ("เพื่ออ่านรหัส SMS โดยอัตโนมัติ แอปต้องการสิทธิ์ Full Disk Access ในการเข้าถึงฐานข้อมูล "
-               "Messages macOS ไม่อนุญาตให้แอปขอสิทธิ์นี้ จึงต้องให้ด้วยตนเอง:\n\n"
-               "System Settings → Privacy & Security → Full Disk Access → {who}\n\n"
-               "ในระหว่างนี้ แอปจะถามรหัสจากคุณในหน้าต่าง")},
 
     # --- Open at Login dialogs ----------------------------------------------
     "dlg.login_item.title": {"en": "Open at Login", "th": "เปิดเมื่อเข้าสู่ระบบ"},

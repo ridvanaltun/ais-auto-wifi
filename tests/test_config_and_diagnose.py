@@ -14,7 +14,6 @@ from unittest import mock
 import requests
 
 from aiswifi import config as config_mod
-from aiswifi import otp
 
 
 class _TempConfigDir(unittest.TestCase):
@@ -38,7 +37,7 @@ class ConfigTests(_TempConfigDir):
     def test_invalid_values_fall_back_to_defaults(self):
         config_mod.CONFIG_PATH.write_text(json.dumps({
             "poll_interval": "15s", "max_retries": 0, "login_method": "sms",
-            "auto_login": "yes", "otp_wait_timeout": 45, "unknown": 1,
+            "auto_login": "yes", "http_timeout": 20, "unknown": 1,
             "portal_cert_pins": {"portal.example": "ab" * 32},
             "trusted_portal_hosts": ["10.0.0.1", 5],
         }), encoding="utf-8")
@@ -49,7 +48,7 @@ class ConfigTests(_TempConfigDir):
         self.assertEqual(cfg["max_retries"], d["max_retries"])
         self.assertEqual(cfg["login_method"], d["login_method"])
         self.assertEqual(cfg["auto_login"], d["auto_login"])
-        self.assertEqual(cfg["otp_wait_timeout"], 45)
+        self.assertEqual(cfg["http_timeout"], 20)  # a valid override is kept
         self.assertEqual(cfg["portal_cert_pins"], {"portal.example": "ab" * 32})
         self.assertEqual(cfg["trusted_portal_hosts"], [])  # a non-string entry → default
         self.assertNotIn("unknown", cfg)
@@ -85,14 +84,12 @@ class DiagnoseWithoutMacTests(_TempConfigDir):
                 mock.patch.object(requests.Session, "get", no_network), \
                 mock.patch.object(keyring, "get_password",
                                   side_effect=keyring.errors.NoKeyringError("no backend")), \
-                mock.patch.object(otp, "CHAT_DB", self.dir / "missing" / "chat.db"), \
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(run.main(["--diagnose"]), 0)
         text = out.getvalue()
         self.assertIn("Status       : offline", text)
         self.assertIn("SSID         : (unreadable", text)
         self.assertIn("Credentials  : unreadable", text)
-        self.assertIn("Messages     : unreadable", text)
         self.assertIn("Diagnostics complete.", text)
 
     def test_diagnose_shows_time_left_when_on_ais(self):
@@ -108,7 +105,6 @@ class DiagnoseWithoutMacTests(_TempConfigDir):
                                   return_value=network.ProbeResult(network.ONLINE)), \
                 mock.patch.object(AISProvider, "session_status", return_value=info), \
                 mock.patch.object(config_mod, "get_credentials", return_value=(None, None)), \
-                mock.patch.object(otp, "can_read_messages", return_value=False), \
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(run.main(["--diagnose"]), 0)
         self.assertIn("Time left    : 00:10:42 (session 00:19:18)", out.getvalue())

@@ -69,36 +69,6 @@ class AskOtpThreadingTests(unittest.TestCase):
 
 
 @unittest.skipIf(app_mod is None, "requires macOS + rumps")
-class FullDiskAccessGuidanceTests(unittest.TestCase):
-    """macOS never prompts for Full Disk Access, so the app must explain it."""
-
-    def _switch_to_otp(self, readable, otp_source="messages"):
-        fake_app = mock.Mock()
-        fake_app.cfg = {"login_method": "password", "otp_source": otp_source}
-        with mock.patch.object(app_mod.otp, "can_read_messages", return_value=readable), \
-                mock.patch.object(app_mod.config_mod, "save_config"):
-            app_mod.AISWifiApp._on_method_otp(fake_app, None)
-        self.assertEqual(fake_app.cfg["login_method"], "otp")
-        return fake_app._explain_full_disk_access
-
-    def test_explains_only_when_messages_are_unreadable(self):
-        self._switch_to_otp(readable=False).assert_called_once()
-        self._switch_to_otp(readable=True).assert_not_called()
-        self._switch_to_otp(readable=False, otp_source="ask").assert_not_called()
-
-    def test_open_settings_button_opens_full_disk_access_pane(self):
-        for clicked, opened in ((1, True), (0, False)):
-            with mock.patch.object(app_mod.rumps, "alert", return_value=clicked), \
-                    mock.patch.object(app_mod.AppKit, "NSApplication"), \
-                    mock.patch.object(app_mod.subprocess, "run") as run:
-                app_mod.AISWifiApp._explain_full_disk_access(mock.Mock())
-            if opened:
-                run.assert_called_once_with(["open", app_mod.FULL_DISK_ACCESS_URL], check=False)
-            else:
-                run.assert_not_called()
-
-
-@unittest.skipIf(app_mod is None, "requires macOS + rumps")
 class OpenAtLoginMenuTests(unittest.TestCase):
     def toggle(self, current, after=None, clicked=0):
         li = app_mod.login_item
@@ -166,66 +136,6 @@ class RemainingFormatTests(unittest.TestCase):
         app_mod.AISWifiApp._render(app, {"status": app_mod.ST_ONLINE, "ssid": None,
                                          "provider": None, "message": ""})
         self.assertIn("เชื่อมต่อแล้ว", app.status_item.title)  # "Connected" in Thai
-
-
-@unittest.skipIf(app_mod is None, "requires macOS + rumps")
-class OtpSourceMenuTests(unittest.TestCase):
-    def _app(self, source="messages"):
-        app = mock.Mock()
-        app.cfg = {"login_method": "otp", "otp_source": source}
-        app.otp_src_messages = mock.Mock()
-        app.otp_src_ask = mock.Mock()
-        return app
-
-    def test_ask_option_sets_config_and_checks(self):
-        app = self._app()
-        with mock.patch.object(app_mod.config_mod, "save_config") as save:
-            app_mod.AISWifiApp._on_otp_source_ask(app, None)
-        self.assertEqual(app.cfg["otp_source"], "ask")
-        save.assert_called_once()
-        app_mod.AISWifiApp._sync_otp_source_checks(app)
-        self.assertEqual((app.otp_src_ask.state, app.otp_src_messages.state), (1, 0))
-
-    def test_messages_option_warns_when_unreadable(self):
-        app = self._app(source="ask")
-        with mock.patch.object(app_mod.config_mod, "save_config"), \
-                mock.patch.object(app_mod.otp, "can_read_messages", return_value=False):
-            app_mod.AISWifiApp._on_otp_source_messages(app, None)
-        self.assertEqual(app.cfg["otp_source"], "messages")
-        app._explain_full_disk_access.assert_called_once()
-
-    def test_messages_option_no_warning_when_readable(self):
-        app = self._app(source="ask")
-        with mock.patch.object(app_mod.config_mod, "save_config"), \
-                mock.patch.object(app_mod.otp, "can_read_messages", return_value=True):
-            app_mod.AISWifiApp._on_otp_source_messages(app, None)
-        app._explain_full_disk_access.assert_not_called()
-
-
-@unittest.skipIf(app_mod is None, "requires macOS + rumps")
-class PermissionsMenuTests(unittest.TestCase):
-    def _sync(self, method, source, fda):
-        app = mock.Mock()
-        app.cfg = {"login_method": method, "otp_source": source, "language": "en"}
-        app._t = app_mod.AISWifiApp._t.__get__(app)  # real translations
-        with mock.patch.object(app_mod.otp, "can_read_messages", return_value=fda):
-            app_mod.AISWifiApp._sync_permissions(app)
-        return app
-
-    def test_warns_only_when_messages_otp_needs_missing_access(self):
-        a = self._sync("otp", "messages", False)
-        self.assertIn("⚠️", a.perm_menu.title)
-        self.assertEqual(a.perm_fda.state, 0)
-        self.assertIn("not granted", a.perm_fda.title)
-
-    def test_no_warning_when_access_granted(self):
-        a = self._sync("otp", "messages", True)
-        self.assertEqual(a.perm_menu.title, "Permissions")
-        self.assertEqual(a.perm_fda.state, 1)
-
-    def test_no_warning_for_ask_mode_or_password(self):
-        self.assertEqual(self._sync("otp", "ask", False).perm_menu.title, "Permissions")
-        self.assertEqual(self._sync("password", "messages", False).perm_menu.title, "Permissions")
 
 
 @unittest.skipIf(app_mod is None, "requires macOS + rumps")

@@ -3,7 +3,7 @@ Menu bar (tray) interface — built with rumps.
 
 - The icon shows the connection status (connected / disconnected / logging in).
 - From the menu: connect now, toggle automatic login, enter credentials,
-  choose the method, pick the language, open the log file, quit.
+  choose the method and language, open the log file, quit.
 - Network work runs in the background (Monitor thread); the UI only shows
   the status. The status is read safely by a Timer on the main loop.
 - All user-facing text goes through `i18n` (English default, Thai optional).
@@ -29,13 +29,10 @@ from . import monitor as monitor_mod
 from .monitor import (
     ST_CAPTIVE, ST_CHECKING, ST_ERROR, ST_IDLE, ST_LOGGING_IN, ST_OFFLINE, ST_ONLINE,
 )
-from . import login_item, otp
+from . import login_item
 from . import providers as providers_mod
 
 logger = logging.getLogger("aiswifi.app")
-
-# System Settings → Privacy & Security → Full Disk Access
-FULL_DISK_ACCESS_URL = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
 
 # Menu bar title (short icon) per status. Emoji are used instead of text.
 STATUS_ICON = {
@@ -100,7 +97,6 @@ class AISWifiApp(rumps.App):
 
         self._last_status: Optional[str] = None
         self._error_notified = False  # no repeated notifications for the same problem
-        self._ticks = 0
 
         # --- Menu items ---------------------------------------------------------
         # rumps keys each menu item by its title, so titles must be set (and be
@@ -117,11 +113,6 @@ class AISWifiApp(rumps.App):
         self.method_menu = rumps.MenuItem("")
         self.method_pw = rumps.MenuItem("", callback=self._on_method_password)
         self.method_otp = rumps.MenuItem("", callback=self._on_method_otp)
-        self.otp_src_menu = rumps.MenuItem("")
-        self.otp_src_messages = rumps.MenuItem("", callback=self._on_otp_source_messages)
-        self.otp_src_ask = rumps.MenuItem("", callback=self._on_otp_source_ask)
-        self.perm_menu = rumps.MenuItem("")
-        self.perm_fda = rumps.MenuItem("", callback=self._on_open_fda)
         self.lang_menu = rumps.MenuItem("")
         # Language labels are always shown in their own script (constant).
         self.lang_en = rumps.MenuItem(i18n.LANGUAGES["en"], callback=self._on_lang_en)
@@ -135,9 +126,6 @@ class AISWifiApp(rumps.App):
         self._render(self.monitor.state.snapshot())
         self.method_menu.add(self.method_pw)
         self.method_menu.add(self.method_otp)
-        self.otp_src_menu.add(self.otp_src_messages)
-        self.otp_src_menu.add(self.otp_src_ask)
-        self.perm_menu.add(self.perm_fda)
         self.lang_menu.add(self.lang_en)
         self.lang_menu.add(self.lang_th)
 
@@ -152,8 +140,6 @@ class AISWifiApp(rumps.App):
             None,
             self.creds_item,
             self.method_menu,
-            self.otp_src_menu,
-            self.perm_menu,
             None,
             self.lang_menu,
             self.log_item,
@@ -162,12 +148,12 @@ class AISWifiApp(rumps.App):
             self.quit_item,
         ]
 
-        # Reflect current settings/state in the checkmarks and dynamic titles.
+        # Reflect current settings/state in the checkmarks.
         self._sync_method_checks()
-        self._sync_otp_source_checks()
         self._sync_lang_checks()
         self._sync_login_item()
-        self._sync_permissions()
+
+        self._ticks = 0
 
         # Start the background monitor
         self.monitor.start()
@@ -190,12 +176,7 @@ class AISWifiApp(rumps.App):
         self.method_menu.title = self._t("menu.login_method")
         self.method_pw.title = self._t("menu.method_password")
         self.method_otp.title = self._t("menu.method_otp")
-        self.otp_src_menu.title = self._t("menu.otp_source")
-        self.otp_src_messages.title = self._t("menu.otp_messages")
-        self.otp_src_ask.title = self._t("menu.otp_ask")
         self.lang_menu.title = self._t("menu.language")
-        self.perm_menu.title = self._t("perm.menu")        # ⚠️ added by _sync_permissions
-        self.perm_fda.title = self._t("perm.fda_denied")   # corrected by _sync_permissions
         self.log_item.title = self._t("menu.open_logs")
         self.about_item.title = self._t("menu.about", version=__version__)
         self.quit_item.title = self._t("menu.quit")
@@ -204,10 +185,8 @@ class AISWifiApp(rumps.App):
         """Re-render every user-facing string for the current language."""
         self._retitle()
         self._sync_method_checks()
-        self._sync_otp_source_checks()
         self._sync_lang_checks()
         self._sync_login_item()
-        self._sync_permissions()
         self._render(self.monitor.state.snapshot())
 
     def _sync_lang_checks(self) -> None:
@@ -278,11 +257,10 @@ class AISWifiApp(rumps.App):
             self._notify_transition(self._last_status, status, snap.get("message") or "")
             self._last_status = status
 
-        # Pick up Login Items / permission changes made in System Settings.
+        # Pick up Login Items changes made in System Settings.
         self._ticks += 1
         if self._ticks % 10 == 0:
             self._sync_login_item()
-            self._sync_permissions()
 
     def _notify(self, title: str, message: str) -> None:
         """Show a notification (main thread). Silently skip if there is no notification center."""
@@ -350,71 +328,16 @@ class AISWifiApp(rumps.App):
         self.cfg["login_method"] = "password"
         config_mod.save_config(self.cfg)
         self._sync_method_checks()
-        self._sync_permissions()
 
     def _on_method_otp(self, _sender) -> None:
         self.cfg["login_method"] = "otp"
         config_mod.save_config(self.cfg)
         self._sync_method_checks()
-        self._sync_permissions()
-        if self.cfg.get("otp_source") == "messages" and not otp.can_read_messages():
-            self._explain_full_disk_access()
-
-    def _explain_full_disk_access(self) -> None:
-        """
-        macOS never prompts for Full Disk Access (reads are silently denied),
-        so the only thing the app can do is explain it and open the right
-        System Settings pane.
-        """
-        _bring_to_front()
-        who_key = "dlg.fda.who_app" if login_item.running_as_app() else "dlg.fda.who_terminal"
-        who = self._t(who_key, app=__app_name__)
-        clicked = rumps.alert(
-            title=self._t("dlg.fda.title"),
-            message=self._t("dlg.fda.msg", who=who),
-            ok=self._t("btn.open_settings"), cancel=self._t("btn.later"),
-        )
-        if clicked == 1:
-            subprocess.run(["open", FULL_DISK_ACCESS_URL], check=False)
 
     def _sync_method_checks(self) -> None:
         is_pw = self.cfg.get("login_method", "password") == "password"
         self.method_pw.state = 1 if is_pw else 0
         self.method_otp.state = 0 if is_pw else 1
-
-    def _on_otp_source_messages(self, _sender) -> None:
-        self.cfg["otp_source"] = "messages"
-        config_mod.save_config(self.cfg)
-        self._sync_otp_source_checks()
-        self._sync_permissions()
-        # Only meaningful with the SMS OTP method; warn if Messages is unreadable.
-        if self.cfg.get("login_method") == "otp" and not otp.can_read_messages():
-            self._explain_full_disk_access()
-
-    def _on_otp_source_ask(self, _sender) -> None:
-        self.cfg["otp_source"] = "ask"
-        config_mod.save_config(self.cfg)
-        self._sync_otp_source_checks()
-        self._sync_permissions()
-
-    def _sync_otp_source_checks(self) -> None:
-        source = self.cfg.get("otp_source", "messages")
-        self.otp_src_messages.state = 1 if source == "messages" else 0
-        self.otp_src_ask.state = 1 if source == "ask" else 0
-
-    def _sync_permissions(self) -> None:
-        """Reflect permission state in the Permissions submenu (live)."""
-        fda_ok = otp.can_read_messages()
-        self.perm_fda.state = 1 if fda_ok else 0
-        self.perm_fda.title = self._t("perm.fda_granted" if fda_ok else "perm.fda_denied")
-        # A ⚠️ on the parent only when the current settings actually need it:
-        # SMS OTP method reading the code from Messages, but access is missing.
-        needs_fda = (self.cfg.get("login_method") == "otp"
-                     and self.cfg.get("otp_source") == "messages" and not fda_ok)
-        self.perm_menu.title = self._t("perm.menu") + ("  ⚠️" if needs_fda else "")
-
-    def _on_open_fda(self, _sender) -> None:
-        self._explain_full_disk_access()
 
     def _on_set_credentials(self, _sender) -> None:
         # For which provider? The preferred one if set, otherwise AIS.

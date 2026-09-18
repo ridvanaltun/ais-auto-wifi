@@ -21,7 +21,7 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from . import i18n, network, otp, portal
+from . import i18n, network, portal
 from . import providers as providers_mod
 from . import config as config_mod
 
@@ -289,9 +289,9 @@ class Monitor:
         self._set_state(status=ST_LOGGING_IN, provider=provider.name,
                         message=self._t("msg.provider_logging_in", provider=provider.name))
 
-        # OTP: every attempt triggers a NEW SMS and waits ~otp_wait_timeout
-        # seconds for the code; so only ONE attempt is made per cycle and the
-        # retry is left to the monitor loop's backoff (at least OTP_MIN_BACKOFF).
+        # OTP: every attempt triggers a NEW SMS and waits for the user to type
+        # the code; so only ONE attempt is made per cycle and the retry is left
+        # to the monitor loop's backoff (at least OTP_MIN_BACKOFF).
         retries = 1 if method == "otp" else max(1, int(self.cfg.get("max_retries", 3)))
         timeout = float(self.cfg.get("http_timeout", 12))
         for attempt in range(1, retries + 1):
@@ -364,16 +364,14 @@ class Monitor:
     def _make_otp_provider(self) -> Tuple[Optional[Callable[[], None]],
                                           Callable[[], Optional[str]]]:
         """
-        Build a (prepare, get-code) function pair based on the configuration:
-          - "messages": read the SMS from the Messages database automatically;
-                        if it cannot be read or the time runs out, ask the
-                        user (if possible),
-          - "ask":      ask via the UI (injected by the app),
-          - "none":     no OTP.
-        The prepare function is called BEFORE the request that triggers the SMS.
+        Build a (prepare, get-code) pair for the OTP login.
+
+        The code is always requested from the user via the UI callback. Reading
+        it automatically from the Mac's Messages app cannot work here: on a
+        captive portal the Mac has no internet, so the forwarded SMS never
+        arrives until you are already logged in. There is nothing to prepare
+        before the SMS is triggered, so the prepare hook is None.
         """
-        source = self.cfg.get("otp_source", "messages")
-        timeout = int(self.cfg.get("otp_wait_timeout", 90))
         ask = self._ask_otp_cb
 
         def ask_user() -> Optional[str]:
@@ -382,41 +380,7 @@ class Monitor:
             self._set_state(message=self._t("msg.waiting_otp_dialog"))
             return ask()
 
-        if source == "messages":
-            box: Dict[str, Optional[int]] = {}
-
-            def prepare() -> None:
-                box["baseline"] = otp.current_baseline()
-
-            def provider_fn() -> Optional[str]:
-                if "baseline" in box:
-                    baseline = box["baseline"]
-                else:
-                    # prepare() was not called (custom provider): old behaviour.
-                    logger.warning("Taking the OTP reference point after the SMS request; "
-                                   "a fast SMS may be missed.")
-                    baseline = otp.current_baseline()
-                if baseline is None:
-                    logger.warning("The Messages database cannot be read (Full Disk Access "
-                                   "may not be granted); the SMS cannot be read automatically.")
-                else:
-                    logger.info("Waiting for the SMS OTP (up to %ss)…", timeout)
-                    self._set_state(message=self._t("msg.waiting_sms"))
-                    code = otp.wait_for_new_otp(baseline, timeout=timeout,
-                                                stop_event=self._stop)
-                    if code:
-                        return code
-                    logger.warning("No new SMS containing an OTP arrived in time.")
-                return ask_user()
-
-            return prepare, provider_fn
-
-        if source == "ask" and ask is not None:
-            return None, ask_user
-
-        def none_fn() -> Optional[str]:
-            return None
-        return None, none_fn
+        return None, ask_user
 
     def set_ask_otp_callback(self, cb: Callable[[], Optional[str]]) -> None:
         """The UI can provide a callback for asking the user for the OTP."""

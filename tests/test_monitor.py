@@ -6,7 +6,7 @@ from unittest import mock
 
 from aiswifi import config as config_mod
 from aiswifi import monitor as monitor_mod
-from aiswifi import network, otp
+from aiswifi import network
 
 
 class _FastEvent(threading.Event):
@@ -72,33 +72,21 @@ class RetryPolicyTests(unittest.TestCase):
         self.assertEqual(m.state.snapshot()["last_error"], "keychain")
 
 
-class OtpSourceTests(unittest.TestCase):
-    def test_messages_baseline_taken_in_prepare(self):
-        m = _monitor(otp_source="messages", otp_wait_timeout=1)
-        with mock.patch.object(otp, "current_baseline", return_value=41) as cb, \
-                mock.patch.object(otp, "wait_for_new_otp", return_value="482193") as wait:
-            prepare, fn = m._make_otp_provider()
-            prepare()
-            self.assertEqual(fn(), "482193")
-        self.assertEqual(cb.call_count, 1)
-        self.assertEqual(wait.call_args[0][0], 41)
-
-    def test_unreadable_messages_fall_back_to_asking(self):
-        m = _monitor(otp_source="messages")
-        m.set_ask_otp_callback(lambda: "999999")
-        with mock.patch.object(otp, "current_baseline", return_value=None), \
-                mock.patch.object(otp, "wait_for_new_otp") as wait:
-            prepare, fn = m._make_otp_provider()
-            prepare()
-            self.assertEqual(fn(), "999999")
-        wait.assert_not_called()  # if unreadable, don't wait 90 s for nothing
-
-    def test_ask_source(self):
-        m = _monitor(otp_source="ask")
+class OtpProviderTests(unittest.TestCase):
+    def test_otp_always_asks_the_user(self):
+        # The code is requested from the UI; there is no Messages auto-read
+        # (the SMS can't reach the Mac on a captive portal) and no prepare step.
+        m = _monitor()
         m.set_ask_otp_callback(lambda: "1234")
         prepare, fn = m._make_otp_provider()
         self.assertIsNone(prepare)
         self.assertEqual(fn(), "1234")
+
+    def test_no_callback_returns_none(self):
+        m = _monitor()  # no ask callback set (e.g. headless)
+        prepare, fn = m._make_otp_provider()
+        self.assertIsNone(prepare)
+        self.assertIsNone(fn())
 
 
 class _StatusProvider:

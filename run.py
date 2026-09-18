@@ -15,15 +15,10 @@ from __future__ import annotations
 import sys
 
 
-def _mask(code: str) -> str:
-    """Don't print the full OTP to the screen/a report (it may still be valid)."""
-    return "•" * max(0, len(code) - 2) + code[-2:]
-
-
 def _diagnose() -> int:
     """Test the network state and helpers without opening the UI."""
     from aiswifi import config as config_mod
-    from aiswifi import login_item, network, otp
+    from aiswifi import login_item, network
     from aiswifi import providers as providers_mod
 
     config_mod.setup_logging(verbose=True)
@@ -34,7 +29,6 @@ def _diagnose() -> int:
     print(f"Config file  : {config_mod.CONFIG_PATH}")
     print(f"Log file     : {config_mod.LOG_PATH}")
     print(f"Method       : {cfg.get('login_method')}")
-    print(f"OTP source   : {cfg.get('otp_source')}")
     print(f"Running as   : {'Mac app' if login_item.running_as_app() else 'script'}")
     print(f"Open at Login: {login_item.status().replace('_', ' ')}\n")
 
@@ -87,21 +81,6 @@ def _diagnose() -> int:
             print(f"Password set : {'yes' if password else 'NO'}")
         except config_mod.KeychainError as exc:
             print(f"Credentials  : unreadable ({exc})")
-
-    print("\nChecking Messages (SMS) access…")
-    if not otp.can_read_messages():
-        print("Messages     : unreadable (no Full Disk Access, or chat.db not found)")
-        print("               macOS never asks for this permission; grant it manually in")
-        print("               System Settings → Privacy & Security → Full Disk Access to the")
-        print("               app you run this from (e.g. Terminal), then restart that app.")
-        print("               Only needed for the SMS OTP method.")
-    else:
-        print("Messages     : readable")
-        code = otp.read_latest_otp(within_seconds=300)
-        if code:
-            print(f"OTP (last 5m): {_mask(code)} ({len(code)} digits)")
-        else:
-            print("OTP (last 5m): not found (is Text Message Forwarding on?)")
 
     print("\nDiagnostics complete.")
     return 0
